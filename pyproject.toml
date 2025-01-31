@@ -1,0 +1,25 @@
+[project]
+name = "zebrafish-pencilsdown"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "cloud-volume>=11.1.3",
+    "igneous-pipeline>=4.25.1",
+    "intern>=1.4.1",
+    "matplotlib>=3.10.0",
+    "mipreduce",
+    "networkx>=3.4.2",
+    "numpy>=2.2.2",
+    "pandas>=2.2.3",
+]
+
+[tool.uv]
+dev-dependencies = [
+    "ipykernel>=6.29.5",
+    "ruff>=0.9.3",
+]
+
+[tool.uv.sources]
+mipreduce = { path = "../mipreduce" }
