@@ -59,6 +59,7 @@ uv run igneous image downsample s3://cvdb-bossdb-boss/smith2024/zebrafish/agglom
 uv run igneous image downsample s3://cvdb-bossdb-boss/smith2024/zebrafish/agglomeration_checkpoint_25000 --mip 1 --num-mips 3 --fill-missing --volumetric --queue q-downsample
 uv run igneous image downsample s3://cvdb-bossdb-boss/smith2024/zebrafish/agglomeration_checkpoint_30000 --mip 1 --num-mips 3 --fill-missing --volumetric --queue q-downsample
 uv run igneous image downsample s3://cvdb-bossdb-boss/smith2024/zebrafish/agglomeration_checkpoint_35000 --mip 1 --num-mips 3 --fill-missing --volumetric --queue q-downsample
+uv run igneous image downsample s3://cvdb-bossdb-boss/smith2024/zebrafish/agglomeration --mip 1 --num-mips 3 --fill-missing --volumetric --queue q-downsample
 
 uv run igneous --parallel 8 execute -x q-downsample
 ```
@@ -78,16 +79,17 @@ uv run igneous mesh forge s3://cvdb-bossdb-boss/smith2024/zebrafish/agglomeratio
 uv run igneous execute -x ./q-mesh
 ```
 
-```
-uv run igneous mesh merge-sharded s3://cvdb-bossdb-boss/smith2024/zebrafish/agglomeration_checkpoint_5000 --queue ./q-mesh --nlod 0
-uv run igneous mesh merge-sharded s3://cvdb-bossdb-boss/smith2024/zebrafish/agglomeration_checkpoint_10000 --queue ./q-mesh --nlod 0
-uv run igneous mesh merge-sharded s3://cvdb-bossdb-boss/smith2024/zebrafish/agglomeration_checkpoint_15000 --queue ./q-mesh --nlod 0
-uv run igneous mesh merge-sharded s3://cvdb-bossdb-boss/smith2024/zebrafish/agglomeration_checkpoint_20000 --queue ./q-mesh --nlod 0
-uv run igneous mesh merge-sharded s3://cvdb-bossdb-boss/smith2024/zebrafish/agglomeration_checkpoint_25000 --queue ./q-mesh --nlod 0
-uv run igneous mesh merge-sharded s3://cvdb-bossdb-boss/smith2024/zebrafish/agglomeration_checkpoint_30000 --queue ./q-mesh --nlod 0
-uv run igneous mesh merge-sharded s3://cvdb-bossdb-boss/smith2024/zebrafish/agglomeration_checkpoint_35000 --queue ./q-mesh --nlod 0
-uv run igneous mesh merge-sharded s3://cvdb-bossdb-boss/smith2024/zebrafish/agglomeration --queue ./q-mesh --nlod 0
+```bash
+uv run igneous mesh merge-sharded s3://cvdb-bossdb-boss/smith2024/zebrafish/agglomeration_checkpoint_5000 --queue ./q-mesh-sharded --nlod 0
+uv run igneous mesh merge-sharded s3://cvdb-bossdb-boss/smith2024/zebrafish/agglomeration_checkpoint_10000 --queue ./q-mesh-sharded --nlod 0
+uv run igneous mesh merge-sharded s3://cvdb-bossdb-boss/smith2024/zebrafish/agglomeration_checkpoint_15000 --queue ./q-mesh-sharded --nlod 0
+uv run igneous mesh merge-sharded s3://cvdb-bossdb-boss/smith2024/zebrafish/agglomeration_checkpoint_20000 --queue ./q-mesh-sharded --nlod 0
+uv run igneous mesh merge-sharded s3://cvdb-bossdb-boss/smith2024/zebrafish/agglomeration_checkpoint_25000 --queue ./q-mesh-sharded --nlod 0
+uv run igneous mesh merge-sharded s3://cvdb-bossdb-boss/smith2024/zebrafish/agglomeration_checkpoint_30000 --queue ./q-mesh-sharded --nlod 0
+uv run igneous mesh merge-sharded s3://cvdb-bossdb-boss/smith2024/zebrafish/agglomeration_checkpoint_35000 --queue ./q-mesh-sharded --nlod 0
+uv run igneous mesh merge-sharded s3://cvdb-bossdb-boss/smith2024/zebrafish/agglomeration --queue ./q-mesh-sharded --nlod 0
 
-uv run igneous execute -x ./q-mesh
+uv run igneous execute -x ./q-mesh-sharded
 ```
+
 
