@@ -92,4 +92,18 @@ uv run igneous mesh merge-sharded s3://cvdb-bossdb-boss/smith2024/zebrafish/aggl
 uv run igneous execute -x ./q-mesh-sharded
 ```
 
+## For new checkpoints
 
+After re-running `wget` to get the latest changes, there may be new checkpoints to create. Run the three notebooks above in order, and then you can run the postprocessing steps:
+
+```bash
+uv run igneous image downsample s3://cvdb-bossdb-boss/smith2024/zebrafish/agglomeration_checkpoint_40000 --mip 0 --num-mips 1 --fill-missing --queue q-downsample
+uv run igneous --parallel 8 execute -x q-downsample
+uv run igneous image downsample s3://cvdb-bossdb-boss/smith2024/zebrafish/agglomeration_checkpoint_40000 --mip 1 --num-mips 3 --fill-missing --volumetric --queue q-downsample
+uv run igneous --parallel 8 execute -x q-downsample
+
+uv run igneous mesh forge s3://cvdb-bossdb-boss/smith2024/zebrafish/agglomeration_checkpoint_40000 --mip 2 --queue ./q-mesh --sharded
+uv run igneous execute -x ./q-mesh
+uv run igneous mesh merge-sharded s3://cvdb-bossdb-boss/smith2024/zebrafish/agglomeration_checkpoint_40000 --queue ./q-mesh-sharded --nlod 0
+uv run igneous execute -x ./q-mesh-sharded
+```
