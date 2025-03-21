@@ -104,6 +104,7 @@ uv run igneous --parallel 8 execute -x q-downsample
 
 uv run igneous mesh forge s3://cvdb-bossdb-boss/smith2024/zebrafish/agglomeration_checkpoint_40000 --mip 2 --queue ./q-mesh --sharded
 uv run igneous execute -x ./q-mesh
+
 uv run igneous mesh merge-sharded s3://cvdb-bossdb-boss/smith2024/zebrafish/agglomeration_checkpoint_40000 --queue ./q-mesh-sharded --nlod 0
 uv run igneous execute -x ./q-mesh-sharded
 ```
