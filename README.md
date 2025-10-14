@@ -24,9 +24,11 @@ uv run igneous image ccl clean s3://cvdb-bossdb-boss/smith2024/zebrafish/synapse
 
 ### Create timeseries of changes
 
+```bash
+wget https://taurus.agglomeration.ariadne.ai/api/changes.tsv -O changes.tsv
 ```
-wget https://taurus.agglomeration.ariadne.ai/api/changes.tsv
-```
+
+Because this file is checked into version control, you should see new lines added in the diff of this file.
 
 You can now run these three notebooks in order:
 
