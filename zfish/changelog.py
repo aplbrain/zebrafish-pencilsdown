@@ -1,0 +1,93 @@
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Iterable, NamedTuple
+
+import networkx as nx
+
+
+class ChangeSummary(NamedTuple):
+    graph_snapshots: list[Path]
+    total_changes: int
+
+
+def _apply_change(graph: nx.Graph, parts: Iterable[str]) -> None:
+    op, *payload = parts
+    if op == "+":
+        graph.add_edge(payload[0], payload[1])
+    elif op == "-":
+        if graph.has_edge(payload[0], payload[1]):
+            graph.remove_edge(payload[0], payload[1])
+    elif op == "anchor_add":
+        graph.add_node(payload[0], type="anchor")
+    elif op == "anchor_del":
+        if graph.has_node(payload[0]):
+            graph.remove_node(payload[0])
+    elif op == "note":
+        if graph.has_node(payload[0]):
+            graph.nodes[payload[0]]["note"] = payload[1]
+
+
+def create_component_graph_snapshots(
+    changes_file: Path,
+    output_dir: Path,
+    step_size: int,
+    *,
+    include_change_logs: bool = True,
+    stop_after: int | None = None,
+) -> ChangeSummary:
+    """
+    Build incremental NetworkX component graphs from an Ariadne changelog.
+    """
+    if step_size <= 0:
+        msg = "step_size must be a positive integer"
+        raise ValueError(msg)
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    graph = nx.Graph()
+    graph_paths: list[Path] = []
+    lines_accumulator: list[str] | None = [] if include_change_logs else None
+    changes_path = Path(changes_file)
+
+    with changes_path.open("r", encoding="utf-8") as fh:
+        for line_number, line in enumerate(fh, start=1):
+            parts = line.rstrip("\n").split("\t")
+            if not parts or not parts[0]:
+                continue
+            _apply_change(graph, parts)
+            if lines_accumulator is not None:
+                lines_accumulator.append(line)
+
+            if line_number % step_size == 0:
+                if include_change_logs and lines_accumulator is not None:
+                    _write_change_log_snapshot(
+                        output_dir, changes_path.name, line_number, lines_accumulator
+                    )
+                snapshot_path = _write_graph_snapshot(output_dir, graph, line_number)
+                graph_paths.append(snapshot_path)
+
+            if stop_after is not None and line_number >= stop_after:
+                break
+
+    total_changes = line_number if "line_number" in locals() else 0
+
+    if include_change_logs and lines_accumulator is not None and total_changes:
+        _write_change_log_snapshot(
+            output_dir, changes_path.name, total_changes, lines_accumulator
+        )
+
+    return ChangeSummary(graph_paths, total_changes)
+
+
+def _write_change_log_snapshot(
+    output_dir: Path, stem: str, line_number: int, lines: list[str]
+) -> Path:
+    snapshot_path = output_dir / f"{stem}.{line_number}"
+    snapshot_path.write_text("".join(lines), encoding="utf-8")
+    return snapshot_path
+
+
+def _write_graph_snapshot(output_dir: Path, graph: nx.Graph, line_number: int) -> Path:
+    snapshot_path = output_dir / f"change_nx.{line_number}.gexf"
+    nx.write_gexf(graph, snapshot_path)
+    return snapshot_path
