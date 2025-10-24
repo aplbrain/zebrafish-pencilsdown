@@ -61,8 +61,7 @@ uv run python manage.py remap generate --shuffle-id 1
 Upload shuffled checkpoints by selecting the same shuffle identifier (the destination stem defaults to `.../shuffle_1_checkpoint_` when not overridden):
 
 ```bash
-uv run python manage.py checkpoint upload \
-  --shuffle-id 1
+uv run python manage.py checkpoint upload --shuffle-id 1
 ```
 
 Repeat for `shuffle_2`, `shuffle_3`, etc., to create `shuffle_X_checkpoint_5000`, `shuffle_X_checkpoint_10000`, and so on.
