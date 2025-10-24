@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import random
 from pathlib import Path
 
 from zfish import changelog
@@ -45,6 +46,18 @@ def register_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentPars
         action="store_true",
         help="Skip writing per-interval changelog excerpts.",
     )
+    subsample.add_argument(
+        "--shuffle-count",
+        type=_non_negative_int,
+        default=0,
+        help="Number of shuffled control permutations to generate.",
+    )
+    subsample.add_argument(
+        "--shuffle-seed",
+        type=int,
+        default=None,
+        help="Optional base seed for shuffle permutations.",
+    )
     subsample.set_defaults(func=_run_subsample)
 
 
@@ -52,6 +65,14 @@ def _positive_int(value: str) -> int:
     intval = int(value)
     if intval <= 0:
         msg = "value must be greater than zero"
+        raise argparse.ArgumentTypeError(msg)
+    return intval
+
+
+def _non_negative_int(value: str) -> int:
+    intval = int(value)
+    if intval < 0:
+        msg = "value must not be negative"
         raise argparse.ArgumentTypeError(msg)
     return intval
 
@@ -68,5 +89,30 @@ def _run_subsample(args: argparse.Namespace) -> int:
         f"Wrote {len(summary.graph_snapshots)} graph snapshots "
         f"from {summary.total_changes} changelog entries."
     )
-    return 0
 
+    if args.shuffle_count:
+        base_lines = args.changes_file.read_text(encoding="utf-8").splitlines(
+            keepends=True
+        )
+        for index in range(1, args.shuffle_count + 1):
+            if args.shuffle_seed is not None:
+                rng = random.Random(args.shuffle_seed + index)
+            else:
+                rng = random.Random()
+            shuffled_lines = base_lines[:]
+            rng.shuffle(shuffled_lines)
+            shuffle_dir = args.output_dir / f"shuffle_{index}"
+            shuffle_summary = changelog.create_component_graph_snapshots(
+                args.changes_file,
+                shuffle_dir,
+                args.step_size,
+                include_change_logs=not args.skip_change_logs,
+                stop_after=args.max_changes,
+                changes_sequence=shuffled_lines,
+            )
+            print(
+                f"Shuffle {index}: wrote {len(shuffle_summary.graph_snapshots)} graph "
+                f"snapshots from {shuffle_summary.total_changes} permuted entries."
+            )
+
+    return 0

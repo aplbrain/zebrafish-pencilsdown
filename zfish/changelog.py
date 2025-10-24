@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import ExitStack
 from pathlib import Path
 from typing import Iterable, NamedTuple
 
@@ -35,6 +36,7 @@ def create_component_graph_snapshots(
     *,
     include_change_logs: bool = True,
     stop_after: int | None = None,
+    changes_sequence: Iterable[str] | None = None,
 ) -> ChangeSummary:
     """
     Build incremental NetworkX component graphs from an Ariadne changelog.
@@ -49,8 +51,12 @@ def create_component_graph_snapshots(
     lines_accumulator: list[str] | None = [] if include_change_logs else None
     changes_path = Path(changes_file)
 
-    with changes_path.open("r", encoding="utf-8") as fh:
-        for line_number, line in enumerate(fh, start=1):
+    total_changes = 0
+
+    def process_lines(iterator: Iterable[str]) -> None:
+        nonlocal total_changes
+        for line_number, line in enumerate(iterator, start=1):
+            total_changes = line_number
             parts = line.rstrip("\n").split("\t")
             if not parts or not parts[0]:
                 continue
@@ -68,8 +74,14 @@ def create_component_graph_snapshots(
 
             if stop_after is not None and line_number >= stop_after:
                 break
-
-    total_changes = line_number if "line_number" in locals() else 0
+    with ExitStack() as stack:
+        if changes_sequence is None:
+            iterator = stack.enter_context(
+                changes_path.open("r", encoding="utf-8")
+            )
+        else:
+            iterator = iter(changes_sequence)
+        process_lines(iterator)
 
     if include_change_logs and lines_accumulator is not None and total_changes:
         _write_change_log_snapshot(

@@ -8,9 +8,10 @@ from zfish import checkpoint as checkpoint_mod
 DEFAULT_SUPERVOXELS_PATH = (
     "precomputed://s3://cvdb-bossdb-boss/smith2024/zebrafish/supervoxels"
 )
-DEFAULT_CHECKPOINT_STEM = (
-    "precomputed://s3://cvdb-bossdb-boss/smith2024/zebrafish/agglomeration_checkpoint_"
+DEFAULT_CHECKPOINT_PREFIX = (
+    "precomputed://s3://cvdb-bossdb-boss/smith2024/zebrafish/"
 )
+DEFAULT_CHECKPOINT_STEM = DEFAULT_CHECKPOINT_PREFIX + "agglomeration_checkpoint_"
 
 
 def register_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
@@ -28,6 +29,12 @@ def register_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentPars
         type=Path,
         default=Path("component-graphs"),
         help="Directory containing *.remap.json files.",
+    )
+    upload.add_argument(
+        "--shuffle-id",
+        type=_positive_int,
+        default=None,
+        help="Use remap files from the shuffle_<id> subdirectory and adjust defaults accordingly.",
     )
     upload.add_argument(
         "--supervoxels-path",
@@ -74,12 +81,32 @@ def register_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentPars
     upload.set_defaults(func=_run_upload)
 
 
+def _positive_int(value: str) -> int:
+    intval = int(value)
+    if intval <= 0:
+        msg = "value must be greater than zero"
+        raise argparse.ArgumentTypeError(msg)
+    return intval
+
+
+def _shuffle_checkpoint_stem(shuffle_id: int) -> str:
+    return f"{DEFAULT_CHECKPOINT_PREFIX}shuffle_{shuffle_id}_checkpoint_"
+
+
 def _run_upload(args: argparse.Namespace) -> int:
     block_size = tuple(int(dim) for dim in args.block_size)
+    component_dir = args.component_dir
+    checkpoint_stem = args.checkpoint_stem
+
+    if args.shuffle_id is not None:
+        component_dir = component_dir / f"shuffle_{args.shuffle_id}"
+        if checkpoint_stem == DEFAULT_CHECKPOINT_STEM:
+            checkpoint_stem = _shuffle_checkpoint_stem(args.shuffle_id)
+
     processed = checkpoint_mod.create_checkpoint_channels(
-        args.component_dir,
+        component_dir,
         supervoxel_path=args.supervoxels_path,
-        checkpoint_stem=args.checkpoint_stem,
+        checkpoint_stem=checkpoint_stem,
         jobs=args.jobs,
         block_size=block_size,
         randomize=not args.no_randomize,

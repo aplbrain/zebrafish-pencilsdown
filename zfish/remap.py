@@ -30,6 +30,7 @@ def generate_remap_files(
     *,
     overwrite: bool = False,
     extension: str = ".remap.json",
+    recursive: bool = False,
 ) -> list[Path]:
     """
     Produce remap dictionaries for each GEXF graph in component_dir.
@@ -37,7 +38,8 @@ def generate_remap_files(
     component_dir = Path(component_dir)
     remap_paths: list[Path] = []
 
-    for gexf_path in sorted(component_dir.glob("*.gexf")):
+    globber = component_dir.rglob if recursive else component_dir.glob
+    for gexf_path in sorted(globber("*.gexf")):
         remap_dict = build_remap_dict(nx.read_gexf(gexf_path))
         output_path = gexf_path.with_suffix(gexf_path.suffix + extension)
         if output_path.exists() and not overwrite:
@@ -46,4 +48,3 @@ def generate_remap_files(
         remap_paths.append(output_path)
 
     return remap_paths
-
