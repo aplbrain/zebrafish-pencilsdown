@@ -48,6 +48,11 @@ def register_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentPars
         help="CloudVolume path for the source supervoxels.",
     )
     upload.add_argument(
+        "--checkpoint-prefix",
+        default=DEFAULT_CHECKPOINT_PREFIX,
+        help="Base CloudVolume prefix for destination checkpoint paths.",
+    )
+    upload.add_argument(
         "--checkpoint-stem",
         default=DEFAULT_CHECKPOINT_STEM,
         help="Prefix for destination checkpoint CloudVolume paths.",
@@ -111,8 +116,12 @@ def _nonnegative_int(value: str) -> int:
     return intval
 
 
-def _shuffle_checkpoint_stem(shuffle_id: int) -> str:
-    return f"{DEFAULT_CHECKPOINT_PREFIX}shuffle_{shuffle_id}_checkpoint_"
+def _default_checkpoint_stem(prefix: str) -> str:
+    return f"{prefix}agglomeration_checkpoint_"
+
+
+def _shuffle_checkpoint_stem(shuffle_id: int, *, prefix: str = DEFAULT_CHECKPOINT_PREFIX) -> str:
+    return f"{prefix}shuffle_{shuffle_id}_checkpoint_"
 
 
 def _run_upload(args: argparse.Namespace) -> int:
@@ -120,11 +129,18 @@ def _run_upload(args: argparse.Namespace) -> int:
     chunk_size = tuple(int(dim) for dim in args.chunk_size) if args.chunk_size else None
     component_dir = args.component_dir
     checkpoint_stem = args.checkpoint_stem
+    checkpoint_prefix = args.checkpoint_prefix
+    using_default_stem = args.checkpoint_stem == DEFAULT_CHECKPOINT_STEM
+
+    if using_default_stem:
+        checkpoint_stem = _default_checkpoint_stem(checkpoint_prefix)
 
     if args.shuffle_id is not None:
         component_dir = component_dir / f"shuffle_{args.shuffle_id}"
-        if checkpoint_stem == DEFAULT_CHECKPOINT_STEM:
-            checkpoint_stem = _shuffle_checkpoint_stem(args.shuffle_id)
+        if using_default_stem:
+            checkpoint_stem = _shuffle_checkpoint_stem(
+                args.shuffle_id, prefix=checkpoint_prefix
+            )
 
     processed = checkpoint_mod.create_checkpoint_channels(
         component_dir,

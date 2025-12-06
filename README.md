@@ -1,7 +1,5 @@
 # Zebrafish "Pencils-Down" Paper
 
-Repository point of contact: [Jordan Matelsky](@j6k4m8)
-
 This repository contains code for the preprocessing and analysis of the "Pencils down" paper exploring the relationship between proofreading effort and connectome/contactome quality.
 
 ## Preprocessing
@@ -40,7 +38,7 @@ uv run python manage.py checkpoint upload
 
 -   `manage.py changelog subsample` converts the Ariadne changelog into incremental NetworkX snapshots (stored in `component-graphs/`). The `--step-size` flag controls the cadence of snapshots, and you can disable writing intermediate changelog exports with `--skip-change-logs`.
 -   `manage.py remap generate` walks the component graphs to produce remap dictionaries (`*.remap.json`) for each milestone.
--   `manage.py checkpoint upload` constructs CloudVolume checkpoints for each remap dictionary. You can adjust the mip level for reading/writing (`--mip`), override destination chunk sizes (`--chunk-size`), parallelism (`--jobs`), chunk traversal (`--block-size`), source/destination paths, and skip already uploaded edit counts via repeated `--skip` flags.
+-   `manage.py checkpoint upload` constructs CloudVolume checkpoints for each remap dictionary. You can adjust the mip level for reading/writing (`--mip`), override destination chunk sizes (`--chunk-size`), parallelism (`--jobs`), chunk traversal (`--block-size`), source/destination paths (`--supervoxels-path`, `--checkpoint-prefix`, `--checkpoint-stem`), and skip already uploaded edit counts via repeated `--skip` flags.
 
 For example, to make the 50K checkpoint when 0-45 already exist:
 
@@ -67,7 +65,11 @@ uv run python manage.py remap generate --shuffle-id 1
 Upload shuffled checkpoints by selecting the same shuffle identifier (the destination stem defaults to `.../shuffle_1_checkpoint_` when not overridden):
 
 ```bash
-uv run python manage.py checkpoint upload --shuffle-id 1
+uv run python manage.py checkpoint upload \
+  --shuffle-id 1 \
+  --mip 2 \
+  --supervoxels-path precomputed://s3://cvdb-bossdb-boss/smith2024/zebrafish/supervoxels/ \
+  --checkpoint-prefix precomputed://s3://cvdb-bossdb-boss/martinez2026/zebrafish/
 ```
 
 Repeat for `shuffle_2`, `shuffle_3`, etc., to create `shuffle_X_checkpoint_5000`, `shuffle_X_checkpoint_10000`, and so on.
