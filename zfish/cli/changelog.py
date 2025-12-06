@@ -53,6 +53,17 @@ def register_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentPars
         help="Number of shuffled control permutations to generate.",
     )
     subsample.add_argument(
+        "--shuffle",
+        "--shuffle-mode",
+        dest="shuffle_mode",
+        choices=("default", "naive"),
+        default="default",
+        help=(
+            "Shuffle strategy for control permutations: 'default' preserves per-pair "
+            "merge/split ordering; 'naive' randomizes all lines independently."
+        ),
+    )
+    subsample.add_argument(
         "--shuffle-seed",
         type=int,
         default=None,
@@ -99,8 +110,13 @@ def _run_subsample(args: argparse.Namespace) -> int:
                 rng = random.Random(args.shuffle_seed + index)
             else:
                 rng = random.Random()
-            shuffled_lines = base_lines[:]
-            rng.shuffle(shuffled_lines)
+            if args.shuffle_mode == "naive":
+                shuffled_lines = base_lines[:]
+                rng.shuffle(shuffled_lines)
+            else:
+                shuffled_lines = changelog.shuffle_changes_constrained(
+                    base_lines, rng
+                )
             shuffle_dir = args.output_dir / f"shuffle_{index}"
             shuffle_summary = changelog.create_component_graph_snapshots(
                 args.changes_file,
