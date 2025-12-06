@@ -37,7 +37,8 @@ ipython_config.py
 .LSOverride
 
 # Icon must end with two \r
-Icon
+Icon
+
 
 # Thumbnails
 ._*
@@ -403,3 +404,4 @@ Cargo.lock
 .ionide
 
 # End of https://www.toptal.com/developers/gitignore/api/python,macos,linux,visualstudiocode,rust,node,jupyternotebooks
+data/

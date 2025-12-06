@@ -37,6 +37,12 @@ def register_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentPars
         help="Use remap files from the shuffle_<id> subdirectory and adjust defaults accordingly.",
     )
     upload.add_argument(
+        "--mip",
+        type=_nonnegative_int,
+        default=0,
+        help="Mipmap level to read from the source and write the destination checkpoints.",
+    )
+    upload.add_argument(
         "--supervoxels-path",
         default=DEFAULT_SUPERVOXELS_PATH,
         help="CloudVolume path for the source supervoxels.",
@@ -66,6 +72,14 @@ def register_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentPars
         help="Disable randomization of block upload order.",
     )
     upload.add_argument(
+        "--chunk-size",
+        type=_positive_int,
+        nargs=3,
+        metavar=("X", "Y", "Z"),
+        default=None,
+        help="Chunk size for the destination checkpoints at the requested mip.",
+    )
+    upload.add_argument(
         "--skip",
         type=int,
         action="append",
@@ -89,12 +103,21 @@ def _positive_int(value: str) -> int:
     return intval
 
 
+def _nonnegative_int(value: str) -> int:
+    intval = int(value)
+    if intval < 0:
+        msg = "value must be zero or greater"
+        raise argparse.ArgumentTypeError(msg)
+    return intval
+
+
 def _shuffle_checkpoint_stem(shuffle_id: int) -> str:
     return f"{DEFAULT_CHECKPOINT_PREFIX}shuffle_{shuffle_id}_checkpoint_"
 
 
 def _run_upload(args: argparse.Namespace) -> int:
     block_size = tuple(int(dim) for dim in args.block_size)
+    chunk_size = tuple(int(dim) for dim in args.chunk_size) if args.chunk_size else None
     component_dir = args.component_dir
     checkpoint_stem = args.checkpoint_stem
 
@@ -109,6 +132,8 @@ def _run_upload(args: argparse.Namespace) -> int:
         checkpoint_stem=checkpoint_stem,
         jobs=args.jobs,
         block_size=block_size,
+        chunk_size=chunk_size,
+        mip=args.mip,
         randomize=not args.no_randomize,
         skip_edit_counts=args.skip,
         progress=not args.no_progress,
