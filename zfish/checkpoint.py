@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 import json
 from pathlib import Path
 from random import shuffle
@@ -35,6 +36,8 @@ def create_checkpoint_channels(
     checkpoint_stem: str,
     jobs: int = 16,
     block_size: tuple[int, int, int] = (256, 256, 256),
+    chunk_size: tuple[int, int, int] | None = None,
+    mip: int = 0,
     randomize: bool = True,
     skip_edit_counts: Iterable[int] | None = None,
     progress: bool = True,
@@ -44,7 +47,13 @@ def create_checkpoint_channels(
     """
     remap_dir = Path(remap_dir)
     skip = set(skip_edit_counts or [])
-    src = CloudVolume(supervoxel_path, progress=False)
+    src = CloudVolume(supervoxel_path, progress=False, mip=mip)
+
+    if mip < 0 or mip >= len(src.scales):
+        msg = f"Requested mip {mip} is not available in {supervoxel_path}. Available mips: 0 to {len(src.scales) - 1}"
+        raise ValueError(msg)
+
+    src.mip = mip
 
     processed: list[int] = []
 
@@ -55,7 +64,17 @@ def create_checkpoint_channels(
 
         remap_dict = load_remap_dict(remap_path)
         dst_path = f"{checkpoint_stem}{edit_count}"
-        dst = CloudVolume(dst_path, info=src.info, progress=False)
+        dst_info = deepcopy(src.info)
+        scale = dst_info["scales"][mip]
+        scale = dict(scale)
+        if chunk_size is not None:
+            scale["chunk_sizes"] = [list(chunk_size)]
+        # dst_info["scales"][mip] = scale
+        dst_info["scales"] = [scale]
+
+        dst = CloudVolume(
+            dst_path, info=dst_info, progress=False, mip=scale["resolution"]
+        )
         dst.commit_info()
 
         blocks = list(
@@ -99,4 +118,3 @@ def _process_block(
         preserve_missing_labels=True,
     )
     dst[x1:x2, y1:y2, z1:z2] = remapped
-

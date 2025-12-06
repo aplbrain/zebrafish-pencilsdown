@@ -40,7 +40,7 @@ uv run python manage.py checkpoint upload
 
 -   `manage.py changelog subsample` converts the Ariadne changelog into incremental NetworkX snapshots (stored in `component-graphs/`). The `--step-size` flag controls the cadence of snapshots, and you can disable writing intermediate changelog exports with `--skip-change-logs`.
 -   `manage.py remap generate` walks the component graphs to produce remap dictionaries (`*.remap.json`) for each milestone.
--   `manage.py checkpoint upload` constructs CloudVolume checkpoints for each remap dictionary. You can adjust parallelism (`--jobs`), chunk traversal (`--block-size`), source/destination paths, and skip already uploaded edit counts via repeated `--skip` flags.
+-   `manage.py checkpoint upload` constructs CloudVolume checkpoints for each remap dictionary. You can adjust the mip level for reading/writing (`--mip`), override destination chunk sizes (`--chunk-size`), parallelism (`--jobs`), chunk traversal (`--block-size`), source/destination paths, and skip already uploaded edit counts via repeated `--skip` flags.
 
 For example, to make the 50K checkpoint when 0-45 already exist:
 
