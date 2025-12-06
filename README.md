@@ -55,7 +55,7 @@ This workflow results in the creation of several `agglomeration_checkpoint_####`
 To build control checkpoints with fully permuted edit histories, request one or more shuffles when subsampling:
 
 ```bash
-uv run python manage.py changelog subsample --step-size 5000 --shuffle-count 2 --shuffle-seed 42
+uv run python manage.py changelog subsample --step-size 5000 --shuffle-count 2 --shuffle-seed 42 --shuffle-mode default
 ```
 
 This command writes the canonical snapshots to `component-graphs/` and adds complete random permutations to `component-graphs/shuffle_1/`, `component-graphs/shuffle_2/`, etc. Produce the associated remap dictionaries for a specific shuffle with:
