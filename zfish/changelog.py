@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from contextlib import ExitStack
 from pathlib import Path
+from random import Random
 from typing import Iterable, NamedTuple
 
 import networkx as nx
@@ -103,3 +104,44 @@ def _write_graph_snapshot(output_dir: Path, graph: nx.Graph, line_number: int) -
     snapshot_path = output_dir / f"change_nx.{line_number}.gexf"
     nx.write_gexf(graph, snapshot_path)
     return snapshot_path
+
+
+def shuffle_changes_constrained(lines: list[str], rng: Random) -> list[str]:
+    """
+    Generate a random permutation that preserves per-pair merge/split ordering.
+    """
+    count = len(lines)
+    if count == 0:
+        return []
+
+    adjacency = [[] for _ in range(count)]
+    indegree = [0] * count
+    last_seen_by_pair: dict[tuple[str, str], int] = {}
+
+    for idx, line in enumerate(lines):
+        parts = line.rstrip("\n").split("\t")
+        if parts and parts[0] in {"+", "-"} and len(parts) >= 3:
+            pair = tuple(sorted((parts[1], parts[2])))
+            previous_idx = last_seen_by_pair.get(pair)
+            if previous_idx is not None:
+                adjacency[previous_idx].append(idx)
+                indegree[idx] += 1
+            last_seen_by_pair[pair] = idx
+
+    available = [i for i, deg in enumerate(indegree) if deg == 0]
+    order: list[int] = []
+
+    while available:
+        choice_idx = rng.randrange(len(available))
+        node = available.pop(choice_idx)
+        order.append(node)
+        for neighbor in adjacency[node]:
+            indegree[neighbor] -= 1
+            if indegree[neighbor] == 0:
+                available.append(neighbor)
+
+    if len(order) != count:
+        msg = "Could not generate a valid constrained shuffle order"
+        raise ValueError(msg)
+
+    return [lines[i] for i in order]
