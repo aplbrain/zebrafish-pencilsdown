@@ -42,6 +42,12 @@ uv run python manage.py checkpoint upload
 -   `manage.py remap generate` walks the component graphs to produce remap dictionaries (`*.remap.json`) for each milestone.
 -   `manage.py checkpoint upload` constructs CloudVolume checkpoints for each remap dictionary. You can adjust parallelism (`--jobs`), chunk traversal (`--block-size`), source/destination paths, and skip already uploaded edit counts via repeated `--skip` flags.
 
+For example, to make the 50K checkpoint when 0-45 already exist:
+
+```bash
+uv run python manage.py checkpoint upload --skip 5000 --skip 10000 --skip 15000 --skip 20000 --skip 25000 --skip 30000 --skip 35000 --skip 40000 --skip 45000
+```
+
 This workflow results in the creation of several `agglomeration_checkpoint_####` channels, where each `####` is a checkpoint number corresponding to the number of edits performed to reach this agglomeration threshold.
 
 ### Generating shuffled controls
@@ -126,7 +132,7 @@ uv run igneous execute -x ./q-mesh-sharded
 
 ## For new checkpoints
 
-After re-running `wget` to get the latest changes, there may be new checkpoints to create. Run the three notebooks above in order, and then you can run the postprocessing steps:
+After re-running `wget` to get the latest changes, there may be new checkpoints to create. Run the three commands above in order, and then you can run the postprocessing steps:
 
 ```bash
 uv run igneous image downsample s3://cvdb-bossdb-boss/smith2024/zebrafish/agglomeration_checkpoint_40000 --mip 0 --num-mips 1 --fill-missing --queue q-downsample
