@@ -117,3 +117,18 @@ Each execution of this command uploads a full set of checkpoints for the specifi
 Repeat for `shuffle_2`, etc., to create `shuffle_X_checkpoint_5000`, `shuffle_X_checkpoint_10000`, and so on.
 
 Use `--shuffle=naive` on the `changelog subsample` command to revert to fully random permutation (not recommended).
+
+# Generating Contactomes & Connectomes
+
+Use the [Cloudome](https://github.com/aplbrain/cloudome) tool to generate contactomes and connectomes from the agglomeration checkpoints and shuffles.
+
+# Pulling the latest connectomes and contactomes for analysis
+
+The Martinez 2026 et al. paper has published the latest network edgelists. These can be downloaded with:
+
+```bash
+aws s3 sync s3://cvdb-bossdb-boss/smith2024/pencils-down/ ./data/graphs/
+aws s3 sync s3://cvdb-bossdb-boss/martinez2026/pencils-down/ ./data/shuffles/
+```
+
+This has the result of creating files at, e.g., `data/graphs/s3/s1/s1_c15_connectome_120925.csv`.
