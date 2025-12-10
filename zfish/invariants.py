@@ -2,21 +2,416 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
-from typing import Callable, Mapping
+from typing import Callable, Mapping, Any
+
 from joblib import Parallel, delayed
 from tqdm import tqdm
 
 import networkx as nx
+import rustworkx as rx
 
+# Assuming these exist in your codebase already
 DATASET_CONTACTOME = "contactome"
 DATASET_CONNECTOME = "connectome"
 
 
+# -----------------------------
+# rustworkx invariants
+# -----------------------------
+class RxInvariants:
+    # ---------- helpers ----------
+    @staticmethod
+    def _n_m(G) -> tuple[int, int]:
+        return G.num_nodes(), G.num_edges()
+
+    @staticmethod
+    def _is_directed(G) -> bool:
+        return isinstance(G, rx.PyDiGraph)
+
+    @staticmethod
+    def _degree(G, i: int) -> int:
+        # total degree for both types
+        if isinstance(G, rx.PyDiGraph):
+            return G.in_degree(i) + G.out_degree(i)
+        return G.degree(i)
+
+    @staticmethod
+    def _to_undirected_if_needed(G):
+        if isinstance(G, rx.PyDiGraph):
+            return G.to_undirected(multigraph=G.multigraph)
+        return G
+
+    # ---------- invariants ----------
+    @staticmethod
+    def density(G: rx.PyGraph | rx.PyDiGraph) -> float:
+        """
+        Match nx.density:
+          - undirected: 2m / (n(n-1))
+          - directed:   m / (n(n-1))
+        """
+        n, m = RxInvariants._n_m(G)
+        if n <= 1:
+            return 0.0
+        denom = n * (n - 1)
+        if RxInvariants._is_directed(G):
+            return m / denom
+        return (2 * m) / denom
+
+    @staticmethod
+    def average_degree(G: rx.PyGraph | rx.PyDiGraph) -> float:
+        """
+        Total average degree, consistent with NX lambda:
+        average over total degree (in+out for directed).
+        """
+        n, m = RxInvariants._n_m(G)
+        if n == 0:
+            return 0.0
+        return (2 * m) / n
+
+    @staticmethod
+    def transitivity(G: rx.PyGraph | rx.PyDiGraph) -> float:
+        """
+        rustworkx transitivity exists for PyGraph and PyDiGraph.
+        """
+        return rx.transitivity(G)
+
+    @staticmethod
+    def diameter_dijkstra(
+        G: rx.PyGraph | rx.PyDiGraph,
+        weight_fn=None,
+        disconnected_ok: bool = False,
+        weak_for_directed: bool = True,
+    ) -> float:
+        """
+        All-pairs Dijkstra diameter.
+        For directed graphs defaults to weak diameter (undirected view).
+        """
+        n = G.num_nodes()
+        if n <= 1:
+            return 0.0
+
+        work = G
+        if isinstance(G, rx.PyDiGraph) and weak_for_directed:
+            work = G.to_undirected(multigraph=G.multigraph)
+
+        if isinstance(work, rx.PyDiGraph):
+            dist = rx.digraph_all_pairs_dijkstra_path_lengths(work, lambda _: 1.0)
+        else:
+            dist = rx.graph_all_pairs_dijkstra_path_lengths(work, lambda _: 1.0)
+
+        max_d = 0.0
+        # Missing targets in a row => unreachable
+        for _u, row in dist.items():
+            if not disconnected_ok and len(row) < n - 1:
+                return math.inf
+            for _v, d in row.items():
+                if d is None or math.isinf(d):
+                    if not disconnected_ok:
+                        return math.inf
+                    continue
+                if d > max_d:
+                    max_d = d
+        return max_d
+
+    @staticmethod
+    def triangle_count_avg(G: rx.PyGraph | rx.PyDiGraph) -> float:
+        """
+        Average triangles per node (matches NX spec).
+        For directed graphs, uses weak/undirected view.
+        """
+        UG = RxInvariants._to_undirected_if_needed(G)
+        n = UG.num_nodes()
+        if n == 0:
+            return 0.0
+
+        tri_times3 = 0
+        for u in UG.node_indices():
+            nbrs = list(UG.neighbors(u))
+            k = len(nbrs)
+            if k < 2:
+                continue
+            for i in range(k):
+                v = nbrs[i]
+                for j in range(i + 1, k):
+                    w = nbrs[j]
+                    if UG.has_edge(v, w):
+                        tri_times3 += 1
+
+        triangles = tri_times3 // 3
+        return triangles / n
+
+    @staticmethod
+    def giant_component_fraction(G: rx.PyGraph | rx.PyDiGraph) -> float:
+        """
+        Largest weakly connected component fraction for digraphs;
+        largest connected component for undirected.
+        """
+        n = G.num_nodes()
+        if n == 0:
+            return 0.0
+
+        if isinstance(G, rx.PyDiGraph):
+            UG = G.to_undirected(multigraph=G.multigraph)
+            comps = rx.connected_components(UG)
+        else:
+            comps = rx.connected_components(G)
+
+        largest = max(comps, key=len)
+        return len(largest) / n
+
+    @staticmethod
+    def degree_entropy(G: rx.PyGraph | rx.PyDiGraph, *, base: float = math.e) -> float:
+        n = G.num_nodes()
+        if n == 0:
+            return 0.0
+
+        degs = [RxInvariants._degree(G, i) for i in G.node_indices()]
+        total = sum(degs)
+        if total == 0:
+            return 0.0
+
+        log = math.log if base == math.e else (lambda x: math.log(x, base))
+        return -sum((d / total) * log(d / total) for d in degs if d > 0)
+
+    @staticmethod
+    def average_clustering(G: rx.PyGraph | rx.PyDiGraph) -> float:
+        """
+        Average local clustering coefficient.
+        Directed graphs are treated as weak/undirected.
+        """
+        UG = RxInvariants._to_undirected_if_needed(G)
+        n = UG.num_nodes()
+        if n == 0:
+            return 0.0
+
+        total_c = 0.0
+        for u in UG.node_indices():
+            nbrs = list(UG.neighbors(u))
+            k = len(nbrs)
+            if k < 2:
+                continue
+
+            links = 0
+            for i in range(k):
+                v = nbrs[i]
+                for j in range(i + 1, k):
+                    w = nbrs[j]
+                    if UG.has_edge(v, w):
+                        links += 1
+
+            total_c += (2 * links) / (k * (k - 1))
+
+        return total_c / n
+
+    @staticmethod
+    def degree_assortativity_coefficient(G: rx.PyGraph | rx.PyDiGraph) -> float:
+        """
+        Pearson correlation of endpoint total degrees across edges.
+        Directed graphs are treated as weak/undirected (edge direction ignored).
+        """
+        UG = RxInvariants._to_undirected_if_needed(G)
+        m = UG.num_edges()
+        if m == 0:
+            return math.nan
+
+        deg = {i: UG.degree(i) for i in UG.node_indices()}
+
+        sum_jk = 0.0
+        sum_j_plus_k = 0.0
+        sum_j2_plus_k2 = 0.0
+
+        for u, v, _w in UG.weighted_edge_list():
+            ju = deg[u]
+            kv = deg[v]
+            sum_jk += ju * kv
+            sum_j_plus_k += ju + kv
+            sum_j2_plus_k2 += ju * ju + kv * kv
+
+        m_inv = 1.0 / m
+        term1 = m_inv * sum_jk
+        term2 = (m_inv * 0.5 * sum_j_plus_k) ** 2
+        term3 = m_inv * 0.5 * sum_j2_plus_k2
+
+        denom = term3 - term2
+        if denom == 0:
+            return math.nan
+
+        return (term1 - term2) / denom
+
+    @staticmethod
+    def reciprocity(G: rx.PyGraph | rx.PyDiGraph) -> float:
+        """
+        For directed graphs: fraction of edges with a reverse partner.
+        For undirected graphs: nan (undefined).
+        """
+        if not isinstance(G, rx.PyDiGraph):
+            return math.nan
+
+        m = G.num_edges()
+        if m == 0:
+            return math.nan
+
+        reciprocal_edges = 0
+        for u, v, _w in G.weighted_edge_list():
+            if u == v:
+                continue
+            if G.has_edge(v, u):
+                reciprocal_edges += 1
+
+        return reciprocal_edges / m
+
+    @staticmethod
+    def molloy_reed_index(G: rx.PyGraph | rx.PyDiGraph) -> float:
+        n = G.num_nodes()
+        if n == 0:
+            return 0.0
+
+        degs = [RxInvariants._degree(G, i) for i in G.node_indices()]
+        mean_k = sum(degs) / n
+        if mean_k == 0:
+            return 0.0
+
+        mean_k2 = sum(d * d for d in degs) / n
+        return mean_k2 / mean_k
+
+    @staticmethod
+    def degree_cv(G: rx.PyGraph | rx.PyDiGraph) -> float:
+        degs = [RxInvariants._degree(G, i) for i in G.node_indices()]
+        n = len(degs)
+        if n == 0:
+            return 0.0
+        mean_k = sum(degs) / n
+        if mean_k == 0:
+            return 0.0
+        var_k = sum((d - mean_k) ** 2 for d in degs) / n
+        return math.sqrt(var_k) / mean_k
+
+    @staticmethod
+    def degree_gini(G: rx.PyGraph | rx.PyDiGraph) -> float:
+        degs = sorted(RxInvariants._degree(G, i) for i in G.node_indices())
+        n = len(degs)
+        if n == 0:
+            return 0.0
+        total = sum(degs)
+        if total == 0:
+            return 0.0
+
+        weighted_sum = sum((i + 1) * x for i, x in enumerate(degs))
+        return (2 * weighted_sum) / (n * total) - (n + 1) / n
+
+
+# -----------------------------
+# networkx invariants
+# -----------------------------
+class NxInvariants:
+    @staticmethod
+    def density(G: nx.Graph) -> float:
+        return nx.density(G)
+
+    @staticmethod
+    def average_clustering(G: nx.Graph) -> float:
+        return nx.average_clustering(G)
+
+    @staticmethod
+    def transitivity(G: nx.Graph) -> float:
+        return nx.transitivity(G)
+
+    @staticmethod
+    def average_degree(G: nx.Graph) -> float:
+        n = G.number_of_nodes()
+        if n == 0:
+            return 0.0
+        return (2 * G.number_of_edges()) / n
+
+    @staticmethod
+    def degree_assortativity(G: nx.Graph) -> float:
+        return nx.degree_assortativity_coefficient(G)
+
+    @staticmethod
+    def triangle_count_avg(G: nx.Graph) -> float:
+        n = G.number_of_nodes()
+        if n == 0:
+            return 0.0
+        return sum(nx.triangles(G).values()) / n
+
+    @staticmethod
+    def diameter_undirected(G: nx.Graph) -> float:
+        return nx.diameter(nx.Graph(G))
+
+    @staticmethod
+    def giant_component_fraction(G: nx.Graph) -> float:
+        n = G.number_of_nodes()
+        if n == 0:
+            return 0.0
+        comps = (
+            nx.weakly_connected_components(G)
+            if G.is_directed()
+            else nx.connected_components(G)
+        )
+        largest = max(comps, key=len)
+        return len(largest) / n
+
+    @staticmethod
+    def degree_entropy(G: nx.Graph) -> float:
+        degs = dict(G.degree())
+        total = sum(degs.values())
+        if total == 0:
+            return 0.0
+        return -sum(
+            p * math.log(p) for p in (d / total for d in degs.values()) if p > 0
+        )
+
+    @staticmethod
+    def reciprocity(G: nx.Graph) -> float:
+        return nx.reciprocity(G)
+
+    @staticmethod
+    def molloy_reed_index(G: nx.Graph) -> float:
+        n = G.number_of_nodes()
+        if n == 0:
+            return 0.0
+        degs = dict(G.degree()).values()
+        mean_k = sum(degs) / n
+        if mean_k == 0:
+            return 0.0
+        mean_k2 = sum(d * d for d in degs) / n
+        return mean_k2 / mean_k
+
+    @staticmethod
+    def degree_cv(G: nx.Graph) -> float:
+        degs = list(dict(G.degree()).values())
+        if not degs:
+            return 0.0
+        mean_k = sum(degs) / len(degs)
+        if mean_k == 0:
+            return 0.0
+        var_k = sum((d - mean_k) ** 2 for d in degs) / len(degs)
+        return math.sqrt(var_k) / mean_k
+
+    @staticmethod
+    def degree_gini(G: nx.Graph) -> float:
+        degs = sorted(dict(G.degree()).values())
+        n = len(degs)
+        if n == 0:
+            return 0.0
+        total = sum(degs)
+        if total == 0:
+            return 0.0
+
+        # Gini = (2 * sum_i i*x_i)/(n*sum x) - (n+1)/n
+        weighted_sum = sum((i + 1) * x for i, x in enumerate(degs))
+        return (2 * weighted_sum) / (n * total) - (n + 1) / n
+
+
+# -----------------------------
+# invariant specs
+# -----------------------------
 @dataclass(frozen=True)
 class InvariantSpec:
     name: str
-    func: Callable[[nx.Graph], float]
-    ylabel: str
+    func_nx: Callable[[nx.Graph], float]
+    func_rx: Callable[[Any], float]
+    ylabel: str = ""
     default_on: str = "graph"
     on_overrides: Mapping[str, str] = field(default_factory=dict)
     contactome_enabled: bool = True
@@ -29,90 +424,97 @@ class InvariantSpec:
 _INVARIANT_SPECS: tuple[InvariantSpec, ...] = (
     InvariantSpec(
         name="density",
-        func=nx.density,
+        func_nx=NxInvariants.density,
+        func_rx=RxInvariants.density,
         ylabel="Density",
         on_overrides={DATASET_CONTACTOME: "undirected_graph"},
     ),
     InvariantSpec(
         name="average_clustering",
-        func=nx.average_clustering,
+        func_nx=NxInvariants.average_clustering,
+        func_rx=RxInvariants.average_clustering,
         ylabel="Average Clustering Coefficient",
         on_overrides={DATASET_CONTACTOME: "undirected_graph"},
     ),
     InvariantSpec(
         name="transitivity",
-        func=nx.transitivity,
+        func_nx=NxInvariants.transitivity,
+        func_rx=RxInvariants.transitivity,
         ylabel="Transitivity",
         on_overrides={DATASET_CONTACTOME: "undirected_graph"},
     ),
     InvariantSpec(
         name="average_degree",
-        func=lambda g: sum(dict(g.degree()).values()) / g.number_of_nodes(),
+        func_nx=NxInvariants.average_degree,
+        func_rx=RxInvariants.average_degree,
         ylabel="Average Degree",
         on_overrides={DATASET_CONTACTOME: "undirected_graph"},
     ),
     InvariantSpec(
         name="degree_assortativity",
-        func=nx.degree_assortativity_coefficient,
+        func_nx=NxInvariants.degree_assortativity,
+        func_rx=RxInvariants.degree_assortativity_coefficient,
         ylabel="Degree Assortativity",
         on_overrides={DATASET_CONTACTOME: "undirected_graph"},
     ),
     InvariantSpec(
         name="triangle_count",
-        func=lambda g: sum(nx.triangles(g).values()) / g.number_of_nodes(),
+        func_nx=NxInvariants.triangle_count_avg,
+        func_rx=RxInvariants.triangle_count_avg,
         ylabel="Average Triangle Count",
         default_on="undirected_graph",
         on_overrides={DATASET_CONTACTOME: "undirected_graph"},
     ),
     InvariantSpec(
         name="diameter",
-        func=lambda g: nx.diameter(nx.Graph(g)),
+        func_nx=NxInvariants.diameter_undirected,
+        func_rx=RxInvariants.diameter_dijkstra,
         ylabel="Diameter",
         default_on="lcc_graph",
         contactome_enabled=False,
     ),
     InvariantSpec(
         name="giant_component_fraction",
-        func=lambda g: len(
-            max(
-                (
-                    nx.weakly_connected_components(g)
-                    if g.is_directed()
-                    else nx.connected_components(g)
-                ),
-                key=len,
-            )
-        )
-        / g.number_of_nodes(),
+        func_nx=NxInvariants.giant_component_fraction,
+        func_rx=RxInvariants.giant_component_fraction,
         ylabel="Giant Component Fraction",
         contactome_enabled=False,
     ),
     InvariantSpec(
         name="degree_entropy",
-        func=lambda g: -sum(
-            p * math.log(p)
-            for p in (
-                d / sum(dict(g.degree()).values()) for d in dict(g.degree()).values()
-            )
-            if p > 0
-        ),
+        func_nx=NxInvariants.degree_entropy,
+        func_rx=RxInvariants.degree_entropy,
         ylabel="Degree Entropy",
         contactome_enabled=False,
+        connectome_enabled=False,
     ),
     InvariantSpec(
         name="reciprocity",
-        func=nx.reciprocity,
+        func_nx=NxInvariants.reciprocity,
+        func_rx=RxInvariants.reciprocity,
         ylabel="Reciprocity",
         contactome_enabled=False,
     ),
     InvariantSpec(
         name="molloy_reed_index",
-        func=lambda g: (
-            (sum(d**2 for d in dict(g.degree()).values()) / g.number_of_nodes())
-            / (sum(dict(g.degree()).values()) / g.number_of_nodes())
-        ),
+        func_nx=NxInvariants.molloy_reed_index,
+        func_rx=RxInvariants.molloy_reed_index,
         ylabel="Molloy–Reed Index",
         on_overrides={DATASET_CONTACTOME: "undirected_graph"},
+    ),
+    InvariantSpec(
+        name="degree_cv",
+        func_nx=NxInvariants.degree_cv,
+        func_rx=RxInvariants.degree_cv,
+        ylabel="Degree CV",
+        contactome_enabled=False,
+    ),
+    InvariantSpec(
+        name="degree_gini",
+        func_nx=NxInvariants.degree_gini,
+        func_rx=RxInvariants.degree_gini,
+        ylabel="Degree Gini",
+        contactome_enabled=False,
     ),
 )
 
@@ -132,51 +534,78 @@ def select_invariants(
     return {spec.name: spec for spec in selected}
 
 
+# -----------------------------
+# computation
+# -----------------------------
 def compute_invariants(
     graphs: Mapping[str, Mapping[str, nx.Graph]],
     dataset: str,
     specs: Mapping[str, InvariantSpec] | None = None,
     parallel: bool | int = False,
     progress: bool = False,
+    use_rustworkx: bool = False,
 ) -> dict[str, dict[str, float]]:
     chosen_specs = specs or select_invariants(dataset)
+
     invariants_per_graph: dict[str, dict[str, float]] = {
-        name: {graph_id: None for graph_id in graphs} for name in chosen_specs
+        name: {graph_id: None for graph_id in graphs}  # type: ignore[typeddict-item]
+        for name in chosen_specs
     }
 
-    def _compute_invariants_for_graph(
+    def _compute_one(
         graph_id: str,
         graph_bundle: Mapping[str, nx.Graph],
-        specs: Mapping[str, InvariantSpec],
-        dataset: str,
-    ) -> tuple[str, dict[str, float]]:
-        invariants: dict[str, float] = {}
-        for name, spec in specs.items():
-            target_key = spec.target_for(dataset)
-            target_graph = graph_bundle.get(target_key, graph_bundle.get("graph"))
-            value = spec.func(target_graph)
-            invariants[name] = value
-        return graph_id, invariants
+        spec_name: str,
+        spec: InvariantSpec,
+    ) -> tuple[str, str, float]:
+        target_key = spec.target_for(dataset)
+        target_graph = graph_bundle.get(target_key, graph_bundle.get("graph"))
+        if target_graph is None:
+            raise KeyError(
+                f"Graph bundle for {graph_id} missing target '{target_key}' and 'graph'."
+            )
 
-    if parallel in [0, 1, False]:
-        for graph_id, graph_bundle in tqdm(graphs.items(), disable=not progress):
-            _, invariants = _compute_invariants_for_graph(
-                graph_id, graph_bundle, chosen_specs, dataset
-            )
-            for name, value in invariants.items():
-                invariants_per_graph[name][graph_id] = value
-        return invariants_per_graph
-    else:
-        results = Parallel(n_jobs=parallel)(
-            delayed(_compute_invariants_for_graph)(
-                graph_id, graph_bundle, chosen_specs, dataset
-            )
-            for graph_id, graph_bundle in tqdm(graphs.items(), disable=not progress)
+        value = (
+            spec.func_rx(target_graph) if use_rustworkx else spec.func_nx(target_graph)
         )
-        for graph_id, invariants in results:
-            for name, value in invariants.items():
-                invariants_per_graph[name][graph_id] = value
+        return spec_name, graph_id, value
+
+    # Normalize parallel flag
+    if parallel is True:
+        parallel = -1
+
+    # Serial path
+    if parallel in [0, 1, False]:
+        iterator = graphs.items()
+        if progress:
+            iterator = tqdm(list(iterator), disable=not progress)
+
+        for graph_id, graph_bundle in iterator:
+            for spec_name, spec in chosen_specs.items():
+                name, gid, val = _compute_one(graph_id, graph_bundle, spec_name, spec)
+                invariants_per_graph[name][gid] = val
         return invariants_per_graph
+
+    # Parallel path: each (graph, invariant) is a task
+    tasks = [
+        (graph_id, graph_bundle, spec_name, spec)
+        for graph_id, graph_bundle in graphs.items()
+        for spec_name, spec in chosen_specs.items()
+    ]
+
+    task_iter = tasks
+    if progress:
+        task_iter = tqdm(tasks, disable=not progress)
+
+    results = Parallel(n_jobs=parallel)(
+        delayed(_compute_one)(graph_id, graph_bundle, spec_name, spec)
+        for graph_id, graph_bundle, spec_name, spec in task_iter
+    )
+
+    for spec_name, graph_id, value in results:
+        invariants_per_graph[spec_name][graph_id] = value
+
+    return invariants_per_graph
 
 
 __all__ = [
