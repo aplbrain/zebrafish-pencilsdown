@@ -10,7 +10,7 @@ import numpy as np
 PROGRESS_LEVELS: tuple[float, ...] = (0.50, 0.80, 0.90, 0.95, 0.99)
 PLOT_EXCLUDE: frozenset[str] = frozenset({"density"})
 BIC_TOLERANCE = 1.5
-LIMIT_PREFERENCE_DELTA = 2.5
+LIMIT_PREFERENCE_DELTA = 3
 
 
 @dataclass
