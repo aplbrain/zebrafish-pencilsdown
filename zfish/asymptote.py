@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Callable, Iterable, Mapping, Sequence
+from typing import Callable, Iterable, Literal, Mapping, Sequence
 
 import numpy as np
 
@@ -10,7 +10,7 @@ import numpy as np
 PROGRESS_LEVELS: tuple[float, ...] = (0.50, 0.80, 0.90, 0.95, 0.99)
 PLOT_EXCLUDE: frozenset[str] = frozenset({"density"})
 BIC_TOLERANCE = 1.5
-LIMIT_PREFERENCE_DELTA = 2.5
+LIMIT_PREFERENCE_DELTA = 2
 
 
 @dataclass
@@ -299,53 +299,98 @@ def fit_invariants(
     return fit_results, skipped
 
 
-def format_progress(value: float | None, italic: bool = False) -> str:
+def format_progress(
+    value: float | None,
+    italic: bool = False,
+    lang: Literal["markdown", "latex"] = "markdown",
+) -> str:
     if value is None or math.isinf(value) or math.isnan(value):
         return "—"
     text = f"{value:,.0f}"
-    return f"_{text}_" if italic else text
+    if lang == "markdown":
+        return f"_{text}_" if italic else text
+    elif lang == "latex":
+        return f"\\textit{{{text}}}" if italic else text
+    else:
+        raise ValueError(f"Unknown language: {lang}")
 
 
 def build_summary_lines(
-    fit_results: Sequence[dict], progress_levels: Iterable[float] = PROGRESS_LEVELS
+    fit_results: Sequence[dict],
+    progress_levels: Iterable[float] = PROGRESS_LEVELS,
+    lang: Literal["markdown", "latex"] = "markdown",
 ) -> list[str]:
-    summary_lines = [
-        "| Invariant | Best model | Asymptote (L) | 50% edits | 80% edits | 90% edits | 95% edits | 99% edits |",
-        "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |",
-    ]
-    for result in sorted(fit_results, key=lambda item: item["invariant"]):
-        best = result["best_fit"]
-        limit_value = get_limit_value(best)
-        asymptote_text = f"{limit_value:.6g}" if limit_value is not None else "—"
-        milestones = []
-        last_observed = result["x"].max()
-        for level in progress_levels:
-            edit_value = estimate_progress_edit(result, level, limit_value)
-            italic = (
-                edit_value is not None and edit_value <= last_observed + 1e-9
-            )
-            milestones.append(format_progress(edit_value, italic=italic))
+    if lang == "markdown":
+        summary_lines = [
+            "| Invariant | Best model | Asymptote (L) | 50% edits | 80% edits | 90% edits | 95% edits | 99% edits |",
+            "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |",
+        ]
+        for result in sorted(fit_results, key=lambda item: item["invariant"]):
+            best = result["best_fit"]
+            limit_value = get_limit_value(best)
+            asymptote_text = f"{limit_value:.6g}" if limit_value is not None else "—"
+            milestones = []
+            last_observed = result["x"].max()
+            for level in progress_levels:
+                edit_value = estimate_progress_edit(result, level, limit_value)
+                italic = edit_value is not None and edit_value <= last_observed + 1e-9
+                milestones.append(format_progress(edit_value, italic=italic, lang=lang))
 
-        summary_lines.append(
-            "| {inv} | {model} | {asym} | {p50} | {p80} | {p90} | {p95} | {p99} |".format(
-                inv=result["invariant"],
-                model=best["spec"].name,
-                asym=asymptote_text,
-                p50=milestones[0],
-                p80=milestones[1],
-                p90=milestones[2],
-                p95=milestones[3],
-                p99=milestones[4],
+            summary_lines.append(
+                "| {inv} | {model} | {asym} | {p50} | {p80} | {p90} | {p95} | {p99} |".format(
+                    inv=result["invariant"],
+                    model=best["spec"].name,
+                    asym=asymptote_text,
+                    p50=milestones[0],
+                    p80=milestones[1],
+                    p90=milestones[2],
+                    p95=milestones[3],
+                    p99=milestones[4],
+                )
             )
-        )
-    return summary_lines
+        return summary_lines
+    elif lang == "latex":
+        summary_lines = [
+            r"\begin{tabular}{l|l|r|rrrrr}",
+            r"Invariant & Best model & Asymptote (L) & 50\% edits & 80\% edits & 90\% edits & 95\% edits & 99\% edits \\",
+            r"\hline",
+        ]
+        for result in sorted(fit_results, key=lambda item: item["invariant"]):
+            best = result["best_fit"]
+            limit_value = get_limit_value(best)
+            asymptote_text = f"{limit_value:.6g}" if limit_value is not None else "—"
+            milestones = []
+            last_observed = result["x"].max()
+            for level in progress_levels:
+                edit_value = estimate_progress_edit(result, level, limit_value)
+                italic = edit_value is not None and edit_value <= last_observed + 1e-9
+                milestones.append(format_progress(edit_value, italic=italic, lang=lang))
+
+            summary_lines.append(
+                r"{inv} & {model} & {asym} & {p50} & {p80} & {p90} & {p95} & {p99} \\".format(
+                    inv=result["invariant"].replace("_", r"\_"),
+                    model=best["spec"].name,
+                    asym=asymptote_text,
+                    p50=milestones[0],
+                    p80=milestones[1],
+                    p90=milestones[2],
+                    p95=milestones[3],
+                    p99=milestones[4],
+                )
+            )
+        summary_lines.append(r"\end{tabular}")
+        return summary_lines
+    else:
+        raise ValueError(f"Unknown language: {lang}")
 
 
 def average_milestones(
     fit_results: Sequence[dict],
     progress_levels: Iterable[float] = PROGRESS_LEVELS,
 ) -> tuple[dict[float, float | None], dict[float, float | None], dict[float, str]]:
-    milestone_values: dict[float, list[float]] = {level: [] for level in progress_levels}
+    milestone_values: dict[float, list[float]] = {
+        level: [] for level in progress_levels
+    }
     average_means: dict[float, float | None] = {}
     average_stds: dict[float, float | None] = {}
     for result in fit_results:
