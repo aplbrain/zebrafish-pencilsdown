@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
-from typing import Callable, Mapping, Any
+from typing import Callable, Mapping, Any, Iterable
 
 from joblib import Parallel, delayed
 from tqdm import tqdm
@@ -40,6 +40,42 @@ class RxInvariants:
         if isinstance(G, rx.PyDiGraph):
             return G.to_undirected(multigraph=G.multigraph)
         return G
+
+    @staticmethod
+    def _neighbors_undirected(G: rx.PyGraph, u: int) -> Iterable[int]:
+        # neighbors() is available and fast in rx
+        return G.neighbors(u)
+
+    @staticmethod
+    def _bfs_distances_undirected(G: rx.PyGraph, source: int) -> dict[int, int]:
+        """
+        Simple BFS on PyGraph. Returns distances to reachable nodes.
+        O(n+m) per source; used for diameter_approx.
+        """
+        dist: dict[int, int] = {source: 0}
+        q = [source]
+        head = 0
+        while head < len(q):
+            u = q[head]
+            head += 1
+            du = dist[u]
+            for v in RxInvariants._neighbors_undirected(G, u):
+                if v not in dist:
+                    dist[v] = du + 1
+                    q.append(v)
+        return dist
+
+    @staticmethod
+    def _pick_seeds(n: int, num_seeds: int) -> list[int]:
+        if n <= 0:
+            return []
+        k = min(num_seeds, n)
+        # deterministic spread over node indices
+        if k == n:
+            return list(range(n))
+        step = max(1, n // k)
+        seeds = list(range(0, n, step))[:k]
+        return seeds
 
     # ---------- invariants ----------
     @staticmethod
@@ -85,6 +121,9 @@ class RxInvariants:
         """
         All-pairs Dijkstra diameter.
         For directed graphs defaults to weak diameter (undirected view).
+
+        NOTE: This is expensive (all-pairs shortest paths).
+        Disabled by default for large connectome runs in specs below.
         """
         n = G.num_nodes()
         if n <= 1:
@@ -114,10 +153,55 @@ class RxInvariants:
         return max_d
 
     @staticmethod
+    def diameter_approx(
+        G: rx.PyGraph | rx.PyDiGraph,
+        *,
+        num_seeds: int = 64,
+        weak_for_directed: bool = True,
+        disconnected_ok: bool = True,
+    ) -> float:
+        """
+        Fast approximate diameter via BFS from a small number of seeds.
+
+        - Directed graphs are treated as weak/undirected by default.
+        - Returns max shortest-path length observed from sampled seeds.
+        - If disconnected_ok=False and any BFS doesn't reach all nodes, returns inf.
+
+        Cost: O(num_seeds * (n+m)) with small num_seeds.
+        """
+        n = G.num_nodes()
+        if n <= 1:
+            return 0.0
+
+        work = G
+        if isinstance(G, rx.PyDiGraph) and weak_for_directed:
+            work = G.to_undirected(multigraph=G.multigraph)
+
+        # We only BFS on an undirected PyGraph
+        if isinstance(work, rx.PyDiGraph):
+            # Should not happen with weak_for_directed=True, but safe fallback
+            work = work.to_undirected(multigraph=work.multigraph)
+
+        seeds = RxInvariants._pick_seeds(n, num_seeds)
+        max_d = 0.0
+        for s in seeds:
+            dist = RxInvariants._bfs_distances_undirected(work, s)
+            if not disconnected_ok and len(dist) < n:
+                return math.inf
+            local_max = max(dist.values()) if dist else 0
+            if local_max > max_d:
+                max_d = local_max
+        return float(max_d)
+
+    @staticmethod
     def triangle_count_avg(G: rx.PyGraph | rx.PyDiGraph) -> float:
         """
         Average triangles per node (matches NX spec).
         For directed graphs, uses weak/undirected view.
+
+        NOTE: Explicit triangle enumeration; can get expensive
+        if max degree grows. Disabled by default for large connectomes
+        in specs below.
         """
         UG = RxInvariants._to_undirected_if_needed(G)
         n = UG.num_nodes()
@@ -158,6 +242,113 @@ class RxInvariants:
 
         largest = max(comps, key=len)
         return len(largest) / n
+
+    @staticmethod
+    def num_components(G: rx.PyGraph | rx.PyDiGraph) -> float:
+        """
+        Number of weakly connected components (directed -> undirected view).
+        Cost: O(n+m).
+        """
+        if isinstance(G, rx.PyDiGraph):
+            UG = G.to_undirected(multigraph=G.multigraph)
+            comps = rx.connected_components(UG)
+        else:
+            comps = rx.connected_components(G)
+        return float(len(comps))
+
+    @staticmethod
+    def component_size_cv(G: rx.PyGraph | rx.PyDiGraph) -> float:
+        """
+        CV of component sizes (weak components if directed).
+        Cost dominated by connectivity: O(n+m).
+        """
+        n = G.num_nodes()
+        if n == 0:
+            return 0.0
+
+        if isinstance(G, rx.PyDiGraph):
+            UG = G.to_undirected(multigraph=G.multigraph)
+            comps = rx.connected_components(UG)
+        else:
+            comps = rx.connected_components(G)
+
+        sizes = [len(c) for c in comps]
+        if not sizes:
+            return 0.0
+        mean_s = sum(sizes) / len(sizes)
+        if mean_s == 0:
+            return 0.0
+        var_s = sum((s - mean_s) ** 2 for s in sizes) / len(sizes)
+        return math.sqrt(var_s) / mean_s
+
+    @staticmethod
+    def kcore_max(G: rx.PyGraph | rx.PyDiGraph) -> float:
+        """
+        Degeneracy / maximum k-core level.
+        Implemented via linear-time peeling on an undirected view.
+
+        Cost: O(n+m).
+        """
+        UG = RxInvariants._to_undirected_if_needed(G)
+        n = UG.num_nodes()
+        if n == 0:
+            return 0.0
+
+        # Build adjacency lists once
+        adj: dict[int, set[int]] = {u: set(UG.neighbors(u)) for u in UG.node_indices()}
+        deg: dict[int, int] = {u: len(adj[u]) for u in adj}
+
+        # Bucket queue by degree
+        max_deg = max(deg.values(), default=0)
+        buckets: list[list[int]] = [[] for _ in range(max_deg + 1)]
+        for u, d in deg.items():
+            buckets[d].append(u)
+
+        core = 0
+        removed = set()
+
+        current_deg = 0
+        for current_deg in range(max_deg + 1):
+            stack = buckets[current_deg]
+            while stack:
+                u = stack.pop()
+                if u in removed:
+                    continue
+                removed.add(u)
+                core = max(core, current_deg)
+                for v in list(adj[u]):
+                    if v in removed:
+                        continue
+                    dv = deg[v]
+                    if dv <= current_deg:
+                        continue
+                    # decrement v degree, move to lower bucket
+                    deg[v] = dv - 1
+                    buckets[dv - 1].append(v)
+                    adj[v].discard(u)
+
+        return float(core)
+
+    @staticmethod
+    def top1pct_degree_mass(
+        G: rx.PyGraph | rx.PyDiGraph, *, frac: float = 0.01
+    ) -> float:
+        """
+        Fraction of total degree accounted for by top `frac` nodes by degree.
+        Cost: O(n log n) due to sorting.
+        """
+        n = G.num_nodes()
+        if n == 0:
+            return 0.0
+
+        degs = [RxInvariants._degree(G, i) for i in G.node_indices()]
+        total = sum(degs)
+        if total == 0:
+            return 0.0
+
+        k = max(1, int(math.ceil(frac * n)))
+        top_sum = sum(sorted(degs, reverse=True)[:k])
+        return top_sum / total
 
     @staticmethod
     def degree_entropy(G: rx.PyGraph | rx.PyDiGraph, *, base: float = math.e) -> float:
@@ -339,6 +530,47 @@ class NxInvariants:
         return nx.diameter(nx.Graph(G))
 
     @staticmethod
+    def diameter_approx(
+        G: nx.Graph,
+        *,
+        num_seeds: int = 64,
+        weak_for_directed: bool = True,
+        disconnected_ok: bool = True,
+    ) -> float:
+        """
+        Approx diameter via BFS from sampled seeds.
+        Cost: O(num_seeds * (n+m)).
+        """
+        if G.number_of_nodes() <= 1:
+            return 0.0
+
+        work = G
+        if weak_for_directed and G.is_directed():
+            work = nx.Graph(G)
+
+        n = work.number_of_nodes()
+        nodes = list(work.nodes())
+        if n == 0:
+            return 0.0
+
+        k = min(num_seeds, n)
+        if k == n:
+            seeds = nodes
+        else:
+            step = max(1, n // k)
+            seeds = nodes[0::step][:k]
+
+        max_d = 0
+        for s in seeds:
+            dist = nx.single_source_shortest_path_length(work, s)
+            if not disconnected_ok and len(dist) < n:
+                return math.inf
+            local_max = max(dist.values()) if dist else 0
+            max_d = max(max_d, local_max)
+
+        return float(max_d)
+
+    @staticmethod
     def giant_component_fraction(G: nx.Graph) -> float:
         n = G.number_of_nodes()
         if n == 0:
@@ -350,6 +582,55 @@ class NxInvariants:
         )
         largest = max(comps, key=len)
         return len(largest) / n
+
+    @staticmethod
+    def num_components(G: nx.Graph) -> float:
+        comps = (
+            nx.weakly_connected_components(G)
+            if G.is_directed()
+            else nx.connected_components(G)
+        )
+        return float(sum(1 for _ in comps))
+
+    @staticmethod
+    def component_size_cv(G: nx.Graph) -> float:
+        n = G.number_of_nodes()
+        if n == 0:
+            return 0.0
+        comps = (
+            nx.weakly_connected_components(G)
+            if G.is_directed()
+            else nx.connected_components(G)
+        )
+        sizes = [len(c) for c in comps]
+        if not sizes:
+            return 0.0
+        mean_s = sum(sizes) / len(sizes)
+        if mean_s == 0:
+            return 0.0
+        var_s = sum((s - mean_s) ** 2 for s in sizes) / len(sizes)
+        return math.sqrt(var_s) / mean_s
+
+    @staticmethod
+    def kcore_max(G: nx.Graph) -> float:
+        work = nx.Graph(G) if G.is_directed() else G
+        if work.number_of_nodes() == 0:
+            return 0.0
+        core_num = nx.core_number(work)  # O(n+m)
+        return float(max(core_num.values(), default=0))
+
+    @staticmethod
+    def top1pct_degree_mass(G: nx.Graph, *, frac: float = 0.01) -> float:
+        n = G.number_of_nodes()
+        if n == 0:
+            return 0.0
+        degs = [d for _, d in G.degree()]
+        total = sum(degs)
+        if total == 0:
+            return 0.0
+        k = max(1, int(math.ceil(frac * n)))
+        top_sum = sum(sorted(degs, reverse=True)[:k])
+        return top_sum / total
 
     @staticmethod
     def degree_entropy(G: nx.Graph) -> float:
@@ -464,6 +745,8 @@ _INVARIANT_SPECS: tuple[InvariantSpec, ...] = (
         ylabel="Average Triangle Count",
         default_on="undirected_graph",
         on_overrides={DATASET_CONTACTOME: "undirected_graph"},
+        # Explicit triangle enumeration; disable for big connectomes by default.
+        connectome_enabled=False,
     ),
     InvariantSpec(
         name="diameter",
@@ -472,12 +755,51 @@ _INVARIANT_SPECS: tuple[InvariantSpec, ...] = (
         ylabel="Diameter",
         default_on="lcc_graph",
         contactome_enabled=False,
+        # All-pairs shortest paths; disable for big connectomes by default.
+        connectome_enabled=False,
+    ),
+    InvariantSpec(
+        name="diameter_approx",
+        func_nx=NxInvariants.diameter_approx,
+        func_rx=RxInvariants.diameter_approx,
+        ylabel="Approx. Diameter",
+        default_on="lcc_graph",
+        contactome_enabled=False,
     ),
     InvariantSpec(
         name="giant_component_fraction",
         func_nx=NxInvariants.giant_component_fraction,
         func_rx=RxInvariants.giant_component_fraction,
         ylabel="Giant Component Fraction",
+        contactome_enabled=False,
+    ),
+    InvariantSpec(
+        name="num_components",
+        func_nx=NxInvariants.num_components,
+        func_rx=RxInvariants.num_components,
+        ylabel="# Components",
+        contactome_enabled=False,
+    ),
+    InvariantSpec(
+        name="component_size_cv",
+        func_nx=NxInvariants.component_size_cv,
+        func_rx=RxInvariants.component_size_cv,
+        ylabel="Component Size CV",
+        contactome_enabled=False,
+    ),
+    InvariantSpec(
+        name="kcore_max",
+        func_nx=NxInvariants.kcore_max,
+        func_rx=RxInvariants.kcore_max,
+        ylabel="Max k-core (Degeneracy)",
+        on_overrides={DATASET_CONTACTOME: "undirected_graph"},
+        contactome_enabled=False,
+    ),
+    InvariantSpec(
+        name="top1pct_degree_mass",
+        func_nx=NxInvariants.top1pct_degree_mass,
+        func_rx=RxInvariants.top1pct_degree_mass,
+        ylabel="Top-1% Degree Mass",
         contactome_enabled=False,
     ),
     InvariantSpec(
