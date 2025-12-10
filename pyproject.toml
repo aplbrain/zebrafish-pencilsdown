@@ -17,6 +17,7 @@ dependencies = [
     "numpy>=2.2.2",
     "pandas>=2.2.3",
     "refig>=0.1.0",
+    "rustworkx>=0.17.1",
     "seaborn>=0.13.2",
 ]
 
