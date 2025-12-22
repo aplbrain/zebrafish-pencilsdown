@@ -104,6 +104,14 @@ SPEC_PRIORITY: dict[str, int] = {
 
 
 def checkpoint_to_edits(label: str) -> int:
+    """Convert a checkpoint label into an edit count.
+
+    Args:
+        label: Checkpoint label like "5k" or "5000".
+
+    Returns:
+        The edit count as an integer.
+    """
     clean = label.strip().lower()
     if clean.endswith("k"):
         return int(clean[:-1]) * 1000
@@ -113,8 +121,14 @@ def checkpoint_to_edits(label: str) -> int:
 def compute_checkpoint_metadata(
     invariants_per_graph: Mapping[str, Mapping[str, float]],
 ) -> tuple[list[str], np.ndarray, dict[str, float], float]:
-    """
-    Derive checkpoint ordering, numeric edits, lookup, and default shift.
+    """Derive checkpoint labels, numeric edits, lookup, and default shift.
+
+    Args:
+        invariants_per_graph: Mapping of invariant name to checkpoint values.
+
+    Returns:
+        A tuple containing the ordered checkpoint labels, the numeric edits
+        array, a label-to-edits lookup, and the default shift value.
     """
     reference_invariant = next(iter(invariants_per_graph))
     checkpoint_labels = sorted(
@@ -154,6 +168,18 @@ def fit_model(
     spec: ModelSpec,
     shift: float,
 ) -> dict:
+    """Fit a linearized model and compute diagnostics.
+
+    Args:
+        x_edits: Edit counts for the observations.
+        values: Observed invariant values.
+        spec: Model specification for the design matrix.
+        shift: Positive shift added to edits for stability.
+
+    Returns:
+        A dict containing the fit parameters, predictions, residuals, and
+        summary statistics like BIC/AIC.
+    """
     X = build_design_matrix(x_edits, spec, shift)
     params, _, _, _ = np.linalg.lstsq(X, values, rcond=None)
     fitted = X @ params
@@ -181,6 +207,14 @@ def fit_model(
 
 
 def select_best_fit(candidate_fits: list[dict]) -> dict:
+    """Select the best fit using BIC and tie-breaker rules.
+
+    Args:
+        candidate_fits: Fits produced by ``fit_model`` for one invariant.
+
+    Returns:
+        The selected best-fit dict.
+    """
     ordered = sorted(
         candidate_fits,
         key=lambda item: (
@@ -211,11 +245,28 @@ def select_best_fit(candidate_fits: list[dict]) -> dict:
 
 
 def predict_from_fit(x_edits: np.ndarray, fit: dict) -> np.ndarray:
+    """Predict invariant values from a fit dict.
+
+    Args:
+        x_edits: Edit counts to evaluate.
+        fit: Fit dict returned by ``fit_model``.
+
+    Returns:
+        Predicted values for each edit count.
+    """
     X = build_design_matrix(x_edits, fit["spec"], fit["shift"])
     return X @ fit["params"]
 
 
 def get_limit_value(fit: dict) -> float | None:
+    """Return the asymptote value for a fit, if defined.
+
+    Args:
+        fit: Fit dict returned by ``fit_model``.
+
+    Returns:
+        The limit value (L) if the model has a limit; otherwise ``None``.
+    """
     if not fit["spec"].has_limit:
         return None
     return float(fit["params"][0])
@@ -228,6 +279,19 @@ def estimate_progress_edit(
     max_multiplier: float = 10.0,
     points: int = 2000,
 ) -> float | None:
+    """Estimate the edit count at a given fraction of the asymptote.
+
+    Args:
+        result: One entry from ``fit_invariants`` results.
+        fraction: Fraction of the asymptote to reach (0-1).
+        limit_value: Asymptote value for the best fit.
+        max_multiplier: Expansion factor when extending the search range.
+        points: Number of grid points per search iteration.
+
+    Returns:
+        Estimated edit count where the fit reaches the target fraction, or
+        ``None`` when it cannot be determined.
+    """
     if limit_value is None:
         return None
     start_value = result["y"][0]
@@ -260,6 +324,18 @@ def fit_invariants(
     model_specs: Sequence[ModelSpec],
     shift: float,
 ) -> tuple[list[dict], list[str]]:
+    """Fit models for each invariant across checkpoints.
+
+    Args:
+        invariants_per_graph: Invariant values by checkpoint label.
+        checkpoint_labels: Ordered checkpoint labels to consider.
+        checkpoint_lookup: Mapping from label to numeric edit count.
+        model_specs: Candidate model specifications.
+        shift: Positive shift added to edits for stability.
+
+    Returns:
+        A tuple of (fit_results, skipped_invariants).
+    """
     fit_results: list[dict] = []
     skipped: list[str] = []
 
@@ -304,6 +380,19 @@ def format_progress(
     italic: bool = False,
     lang: Literal["markdown", "latex"] = "markdown",
 ) -> str:
+    """Format a progress milestone for table output.
+
+    Args:
+        value: Numeric edit count or ``None``.
+        italic: Whether to italicize the output (markdown/latex only).
+        lang: Output format, either "markdown" or "latex".
+
+    Returns:
+        A formatted string for the milestone cell.
+
+    Raises:
+        ValueError: If ``lang`` is not supported.
+    """
     if value is None or math.isinf(value) or math.isnan(value):
         return "—"
     text = f"{value:,.0f}"
@@ -320,6 +409,19 @@ def build_summary_lines(
     progress_levels: Iterable[float] = PROGRESS_LEVELS,
     lang: Literal["markdown", "latex"] = "markdown",
 ) -> list[str]:
+    """Build summary table lines for fitted invariants.
+
+    Args:
+        fit_results: Results returned by ``fit_invariants``.
+        progress_levels: Fractions of the asymptote to report.
+        lang: Output format, either "markdown" or "latex".
+
+    Returns:
+        Table lines suitable for the chosen output format.
+
+    Raises:
+        ValueError: If ``lang`` is not supported.
+    """
     if lang == "markdown":
         summary_lines = [
             "| Invariant | Best model | Asymptote (L) | 50% edits | 80% edits | 90% edits | 95% edits | 99% edits |",
@@ -388,6 +490,15 @@ def average_milestones(
     fit_results: Sequence[dict],
     progress_levels: Iterable[float] = PROGRESS_LEVELS,
 ) -> tuple[dict[float, float | None], dict[float, float | None], dict[float, str]]:
+    """Compute mean and std of milestone edits across invariants.
+
+    Args:
+        fit_results: Results returned by ``fit_invariants``.
+        progress_levels: Fractions of the asymptote to summarize.
+
+    Returns:
+        Tuple of (means, stds, formatted_strings) keyed by progress level.
+    """
     milestone_values: dict[float, list[float]] = {
         level: [] for level in progress_levels
     }
@@ -422,6 +533,15 @@ def average_milestones(
 
 
 def chunked(iterable: Iterable, size: int) -> Iterable[list]:
+    """Yield lists of a fixed size from an iterable.
+
+    Args:
+        iterable: Input sequence or iterator.
+        size: Number of items per chunk.
+
+    Yields:
+        Lists of up to ``size`` items, with the final chunk possibly shorter.
+    """
     chunk = []
     for item in iterable:
         chunk.append(item)

@@ -10,6 +10,17 @@ def make_undirected(graph: nx.DiGraph) -> nx.Graph: ...
 @overload
 def make_undirected(graph: rx.PyDiGraph) -> rx.PyGraph: ...
 def make_undirected(graph: Union[nx.DiGraph, rx.PyDiGraph]):
+    """Convert a directed graph to an undirected graph.
+
+    Args:
+        graph: A NetworkX or rustworkx directed graph.
+
+    Returns:
+        An undirected graph of the same library type.
+
+    Raises:
+        TypeError: If the graph type is unsupported.
+    """
     if isinstance(graph, nx.DiGraph):
         return graph.to_undirected()
     if isinstance(graph, rx.PyDiGraph):
@@ -24,6 +35,18 @@ def make_lcc(graph: nx.DiGraph) -> nx.DiGraph: ...
 @overload
 def make_lcc(graph: rx.PyDiGraph) -> rx.PyDiGraph: ...
 def make_lcc(graph: Union[nx.DiGraph, rx.PyDiGraph]):
+    """Return the largest strongly connected component as a subgraph.
+
+    Args:
+        graph: A NetworkX or rustworkx directed graph.
+
+    Returns:
+        A copy of the subgraph induced by the largest strongly connected
+        component.
+
+    Raises:
+        TypeError: If the graph type is unsupported.
+    """
     if isinstance(graph, nx.DiGraph):
         return graph.subgraph(
             max(nx.strongly_connected_components(graph), key=len)
@@ -39,6 +62,17 @@ def make_lwcc_nodes(graph: nx.DiGraph) -> set[int]: ...
 @overload
 def make_lwcc_nodes(graph: rx.PyDiGraph) -> set[int]: ...
 def make_lwcc_nodes(graph: Union[nx.DiGraph, rx.PyDiGraph]) -> set[int]:
+    """Return nodes in the largest strongly connected component.
+
+    Args:
+        graph: A NetworkX or rustworkx directed graph.
+
+    Returns:
+        A set of node identifiers in the largest strongly connected component.
+
+    Raises:
+        TypeError: If the graph type is unsupported.
+    """
     if isinstance(graph, nx.DiGraph):
         return max(nx.strongly_connected_components(graph), key=len)
     if isinstance(graph, rx.PyDiGraph):
@@ -61,6 +95,17 @@ class GraphUtils:
 
 
 def load_connectome_compound_key_csv_to_graph(csv_path: pathlib.Path) -> nx.DiGraph:
+    """Load a connectome CSV with compound keys into a directed graph.
+
+    Args:
+        csv_path: Path to a CSV with columns ``graph_id,synapse_id``.
+
+    Returns:
+        A directed NetworkX graph with weighted edges aggregated by synapse.
+
+    Raises:
+        ValueError: If a row has an unexpected synapse_id format.
+    """
     # rows look like
     # graph_id,synapse_id
     # connectome-0k-101625,syn_x1000_y1093_z2152_pre37775021_post19204134
@@ -92,6 +137,16 @@ def load_all_graphs_from_edgelists(
     rustworkx: bool = True,
     remove_0: bool = True,
 ) -> dict[str, nx.DiGraph]:
+    """Load all edgelist CSVs in a directory into graphs.
+
+    Args:
+        edgelist_path: Directory containing per-graph CSV files.
+        rustworkx: Whether to convert NetworkX graphs to rustworkx.
+        remove_0: Whether to drop node "0" from each graph.
+
+    Returns:
+        Mapping of graph identifier to graph object, sorted by identifier.
+    """
     graphs = {}
     for edgelist_file in edgelist_path.glob("*.csv"):
         graph_name = edgelist_file.stem

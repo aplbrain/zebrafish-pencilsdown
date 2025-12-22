@@ -844,6 +844,15 @@ _INVARIANT_SPECS: tuple[InvariantSpec, ...] = (
 def select_invariants(
     dataset: str, *, include_disabled: bool = False
 ) -> dict[str, InvariantSpec]:
+    """Select invariant specs for the requested dataset.
+
+    Args:
+        dataset: Dataset identifier (e.g., contactome/connectome).
+        include_disabled: Whether to include invariants disabled by default.
+
+    Returns:
+        A mapping of invariant name to ``InvariantSpec``.
+    """
     selected: list[InvariantSpec] = []
     for spec in _INVARIANT_SPECS:
         enabled = (
@@ -867,6 +876,23 @@ def compute_invariants(
     progress: bool = False,
     use_rustworkx: bool = False,
 ) -> dict[str, dict[str, float]]:
+    """Compute invariant values for a bundle of graphs.
+
+    Args:
+        graphs: Mapping of graph_id to graph bundles with named variants.
+        dataset: Dataset identifier (e.g., contactome/connectome).
+        specs: Optional mapping of invariant specs to compute.
+        parallel: ``True``/``-1`` for all cores, ``0``/``1`` for serial, or
+            an explicit job count.
+        progress: Whether to show tqdm progress bars.
+        use_rustworkx: Whether to call ``func_rx`` instead of ``func_nx``.
+
+    Returns:
+        Mapping from invariant name to per-graph values.
+
+    Raises:
+        KeyError: If a graph bundle lacks the target graph variant.
+    """
     chosen_specs = specs or select_invariants(dataset)
 
     invariants_per_graph: dict[str, dict[str, float]] = {
