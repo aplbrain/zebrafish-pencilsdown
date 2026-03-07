@@ -5,6 +5,7 @@ import random
 from pathlib import Path
 
 from zfish import changelog
+from zfish.paths import default_changes_path, default_component_graph_dir
 
 
 def register_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
@@ -20,13 +21,13 @@ def register_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentPars
     subsample.add_argument(
         "--changes-file",
         type=Path,
-        default=Path("changes.tsv"),
+        default=default_changes_path(),
         help="Path to the Ariadne changelog TSV.",
     )
     subsample.add_argument(
         "--output-dir",
         type=Path,
-        default=Path("component-graphs"),
+        default=default_component_graph_dir(),
         help="Directory where snapshot files are written.",
     )
     subsample.add_argument(

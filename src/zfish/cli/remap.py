@@ -4,6 +4,7 @@ import argparse
 from pathlib import Path
 
 from zfish import remap as remap_mod
+from zfish.paths import default_component_graph_dir
 
 
 def register_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
@@ -19,7 +20,7 @@ def register_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentPars
     generate.add_argument(
         "--component-dir",
         type=Path,
-        default=Path("component-graphs"),
+        default=default_component_graph_dir(),
         help="Directory containing component graph GEXF files.",
     )
     generate.add_argument(

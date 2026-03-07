@@ -4,6 +4,7 @@ import argparse
 from pathlib import Path
 
 from zfish import checkpoint as checkpoint_mod
+from zfish.paths import default_component_graph_dir
 
 DEFAULT_SUPERVOXELS_PATH = (
     "precomputed://s3://cvdb-bossdb-boss/smith2024/zebrafish/supervoxels"
@@ -27,7 +28,7 @@ def register_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentPars
     upload.add_argument(
         "--component-dir",
         type=Path,
-        default=Path("component-graphs"),
+        default=default_component_graph_dir(),
         help="Directory containing *.remap.json files.",
     )
     upload.add_argument(

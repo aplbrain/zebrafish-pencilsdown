@@ -73,7 +73,7 @@ def create_checkpoint_channels(
         dst_info["scales"] = [scale]
 
         dst = CloudVolume(
-            dst_path, info=dst_info, progress=False, mip=scale["resolution"]
+            dst_path, info=dst_info, progress=False, mip=0
         )
         dst.commit_info()
 
