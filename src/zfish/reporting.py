@@ -356,6 +356,14 @@ def build_projection_summary_csv_rows(
     return [header, *_projection_table_rows(results, milestones, lang="markdown")]
 
 
+def _format_k_edits(value: float) -> str:
+    if not math.isfinite(value):
+        return "--"
+    if abs(value) >= 1000.0:
+        return f"{value / 1000.0:.1f}K"
+    return f"{value:.0f}"
+
+
 def projection_stats_payload(
     dataset: str,
     results: Sequence[dict[str, Any]],
@@ -405,6 +413,158 @@ def write_csv_rows(path: Path, rows: Sequence[Sequence[str]]) -> Path:
         writer = csv.writer(fh)
         writer.writerows(rows)
     return path
+
+
+def render_projection_milestone_bands(
+    dataset: str,
+    results: Sequence[dict[str, Any]],
+    output_dir: Path,
+    *,
+    milestones: Sequence[float],
+    formats: Sequence[str] = ("svg", "pdf"),
+) -> list[Path]:
+    configure_matplotlib()
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    projected_results = [
+        result
+        for result in sort_projection_results(results)
+        if result["basis"] is not None
+    ]
+    if not projected_results:
+        return []
+
+    milestone_labels = [milestone_label(fraction) for fraction in milestones]
+    x_positions = np.array([fraction * 100.0 for fraction in milestones], dtype=float)
+    milestone_summary = summarize_projection_milestones(projected_results, milestones)
+    mean_values = np.array(
+        [
+            np.nan
+            if milestone_summary[label]["mean_edit"] is None
+            else float(milestone_summary[label]["mean_edit"])
+            for label in milestone_labels
+        ],
+        dtype=float,
+    )
+    std_values = np.array(
+        [
+            0.0
+            if milestone_summary[label]["std_edit"] is None
+            else float(milestone_summary[label]["std_edit"])
+            for label in milestone_labels
+        ],
+        dtype=float,
+    )
+
+    fig, ax = plt.subplots(figsize=(8.5, 5.0))
+
+    basis_colors = {
+        BASIS_MONOTONE_TAIL: "#2c7fb8",
+        BASIS_PLATEAU_SIGNAL: "#d95f02",
+    }
+    for result in projected_results:
+        y_values = np.array(
+            [
+                np.nan
+                if result["milestone_edits"][label] is None
+                else float(result["milestone_edits"][label])
+                for label in milestone_labels
+            ],
+            dtype=float,
+        )
+        valid = np.isfinite(y_values)
+        if not np.any(valid):
+            continue
+        ax.plot(
+            x_positions[valid],
+            y_values[valid],
+            color=basis_colors[result["basis"]],
+            linewidth=1.1,
+            alpha=0.35,
+            marker="o",
+            markersize=3.5,
+        )
+
+    valid_mean = np.isfinite(mean_values)
+    if not np.any(valid_mean):
+        plt.close(fig)
+        return []
+
+    lower = np.maximum(mean_values - std_values, 0.0)
+    upper = mean_values + std_values
+    ax.fill_between(
+        x_positions[valid_mean],
+        lower[valid_mean],
+        upper[valid_mean],
+        color="#4daf4a",
+        alpha=0.18,
+        label="Mean ± 1 SD",
+    )
+    ax.errorbar(
+        x_positions[valid_mean],
+        mean_values[valid_mean],
+        yerr=std_values[valid_mean],
+        color="#1b1b1b",
+        linewidth=2.0,
+        marker="o",
+        markersize=5.5,
+        capsize=4,
+        label="Mean edit",
+    )
+
+    for x_value, mean_value, std_value in zip(
+        x_positions[valid_mean],
+        mean_values[valid_mean],
+        std_values[valid_mean],
+    ):
+        ax.annotate(
+            _format_k_edits(mean_value),
+            (x_value, mean_value + std_value),
+            textcoords="offset points",
+            xytext=(0, 10),
+            ha="center",
+            va="bottom",
+            fontsize=8,
+            color="#1b1b1b",
+            bbox={
+                "boxstyle": "round,pad=0.18",
+                "facecolor": "white",
+                "edgecolor": "none",
+                "alpha": 0.9,
+            },
+        )
+
+    ax.set_title(f"{dataset.title()} Projection Milestones")
+    ax.set_xlabel("Percent of projected final value")
+    ax.set_ylabel("Edits")
+    ax.set_xticks(x_positions)
+    ax.set_xticklabels([f"{int(value)}%" for value in x_positions])
+
+    y_ticks = ax.get_yticks()
+    ax.set_yticks(y_ticks)
+    ax.set_yticklabels([_format_k_edits(value) for value in y_ticks])
+    ax.grid(True, axis="y", linestyle=":", linewidth=0.7)
+    ax.legend(frameon=False, loc="upper left")
+    ax.text(
+        0.98,
+        0.02,
+        f"Projected invariants: {len(projected_results)}",
+        transform=ax.transAxes,
+        ha="right",
+        va="bottom",
+        fontsize=8,
+        color="#444444",
+    )
+    fig.tight_layout()
+
+    stem = output_dir / "projection-milestone-bands"
+    output_paths: list[Path] = []
+    for fmt in formats:
+        path = stem.with_suffix(f".{fmt}")
+        fig.savefig(path, bbox_inches="tight")
+        output_paths.append(path)
+    plt.close(fig)
+    return output_paths
 
 
 def render_convergence_grids(
@@ -527,80 +687,6 @@ def render_convergence_grids(
 
     return output_paths
 
-
-def render_projection_summary_table(
-    results: Sequence[dict[str, Any]],
-    output_dir: Path,
-    *,
-    milestones: Sequence[float],
-    formats: Sequence[str] = ("svg", "pdf"),
-) -> list[Path]:
-    configure_matplotlib()
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    sorted_results = sort_projection_results(results)
-    if not sorted_results:
-        return []
-
-    col_labels = ["Invariant", "Projection basis", "Final value"] + [
-        f"{milestone_label(fraction)} edits" for fraction in milestones
-    ]
-    cell_text = [
-        [
-            result["invariant"],
-            _basis_label(result["basis"]),
-            _format_scalar(result["predicted_final"]),
-            *[
-                format_edit(result["milestone_edits"][milestone_label(fraction)])
-                for fraction in milestones
-            ],
-        ]
-        for result in sorted_results
-    ]
-
-    n_rows = len(cell_text)
-    n_cols = len(col_labels)
-    fig_height = max(2.0, 0.36 * (n_rows + 1))
-    fig_width = max(10.5, 1.45 * n_cols)
-
-    fig, ax = plt.subplots(figsize=(fig_width, fig_height))
-    ax.axis("off")
-
-    col_widths = [0.19, 0.15, 0.12] + [0.11] * len(milestones)
-    table = ax.table(
-        cellText=cell_text,
-        colLabels=col_labels,
-        cellLoc="center",
-        loc="center",
-        colWidths=col_widths,
-    )
-    table.auto_set_font_size(False)
-    table.set_fontsize(9)
-    table.scale(1.0, 1.25)
-
-    header_color = "#d9e6f2"
-    even_color = "#f8fbfd"
-    odd_color = "#ffffff"
-    for (row, col), cell in table.get_celld().items():
-        cell.set_edgecolor("#2f2f2f")
-        cell.set_linewidth(0.8)
-        if row == 0:
-            cell.set_facecolor(header_color)
-            cell.set_text_props(weight="bold")
-        else:
-            cell.set_facecolor(even_color if row % 2 == 0 else odd_color)
-
-    fig.tight_layout(pad=0.5)
-    stem = output_dir / "invariant-projection-summary"
-    output_paths: list[Path] = []
-    for fmt in formats:
-        path = stem.with_suffix(f".{fmt}")
-        fig.savefig(path, bbox_inches="tight")
-        output_paths.append(path)
-    plt.close(fig)
-    return output_paths
-
-
 __all__ = [
     "PLOT_EXCLUDE",
     "configure_matplotlib",
@@ -618,5 +704,5 @@ __all__ = [
     "write_json",
     "write_csv_rows",
     "render_convergence_grids",
-    "render_projection_summary_table",
+    "render_projection_milestone_bands",
 ]

@@ -17,6 +17,7 @@ from zfish.reporting import (
     build_projection_summary_csv_rows,
     build_projection_summary_lines,
     projection_stats_payload,
+    render_projection_milestone_bands,
     summarize_projection_results,
     write_csv_rows,
     write_json,
@@ -71,6 +72,12 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         required=True,
         help="JSON output path for projection summary stats.",
+    )
+    parser.add_argument(
+        "--figure-dir",
+        type=Path,
+        required=True,
+        help="Directory for milestone-band figure exports.",
     )
     parser.add_argument(
         "--milestones",
@@ -168,14 +175,24 @@ def main(argv: list[str] | None = None) -> int:
         args.summary_csv,
         build_projection_summary_csv_rows(results, milestones),
     )
+    figure_paths = render_projection_milestone_bands(
+        args.dataset,
+        results,
+        args.figure_dir,
+        milestones=milestones,
+    )
 
     stats_payload = projection_stats_payload(args.dataset, results, milestones)
     stats_payload["input_json"] = str(args.input_json)
     stats_payload["convergence_stats"] = str(args.convergence_stats)
     stats_payload["metric_profile"] = invariants_payload.get("metric_profile")
+    stats_payload["figure_paths"] = [str(path) for path in figure_paths]
     write_json(args.stats_json, stats_payload)
 
-    print(f"Wrote projection summaries for {len(results)} invariants.")
+    print(
+        f"Wrote projection summaries for {len(results)} invariants "
+        f"and {len(figure_paths)} figure file(s)."
+    )
     return 0
 
 

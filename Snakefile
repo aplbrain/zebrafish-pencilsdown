@@ -12,6 +12,7 @@ CONNECTOME_PROJECTION_MD = "results/data/connectome-projection-summary.md"
 CONNECTOME_PROJECTION_TEX = "results/data/connectome-projection-summary.tex"
 CONNECTOME_PROJECTION_CSV = "results/data/connectome-projection-summary.csv"
 CONNECTOME_PROJECTION_STATS_JSON = "results/data/connectome-projection-stats.json"
+CONNECTOME_PROJECTION_FIGURE_DIR = "results/figures/connectome-projection-milestones"
 
 CONTACTOME_SUMMARY_MD = "results/data/contactome-convergence-summary.md"
 CONTACTOME_SUMMARY_TEX = "results/data/contactome-convergence-summary.tex"
@@ -21,6 +22,7 @@ CONTACTOME_PROJECTION_MD = "results/data/contactome-projection-summary.md"
 CONTACTOME_PROJECTION_TEX = "results/data/contactome-projection-summary.tex"
 CONTACTOME_PROJECTION_CSV = "results/data/contactome-projection-summary.csv"
 CONTACTOME_PROJECTION_STATS_JSON = "results/data/contactome-projection-stats.json"
+CONTACTOME_PROJECTION_FIGURE_DIR = "results/figures/contactome-projection-milestones"
 
 
 rule all:
@@ -35,6 +37,7 @@ rule all:
         CONNECTOME_PROJECTION_TEX,
         CONNECTOME_PROJECTION_CSV,
         CONNECTOME_PROJECTION_STATS_JSON,
+        CONNECTOME_PROJECTION_FIGURE_DIR,
         CONTACTOME_SUMMARY_MD,
         CONTACTOME_SUMMARY_TEX,
         CONTACTOME_STATS_JSON,
@@ -43,6 +46,7 @@ rule all:
         CONTACTOME_PROJECTION_TEX,
         CONTACTOME_PROJECTION_CSV,
         CONTACTOME_PROJECTION_STATS_JSON,
+        CONTACTOME_PROJECTION_FIGURE_DIR,
 
 
 rule connectome_invariants:
@@ -116,6 +120,7 @@ rule connectome_projection_summary:
         tex=CONNECTOME_PROJECTION_TEX,
         csv=CONNECTOME_PROJECTION_CSV,
         stats=CONNECTOME_PROJECTION_STATS_JSON,
+        figures=directory(CONNECTOME_PROJECTION_FIGURE_DIR),
     shell:
         "uv run python analysis/projections/run.py "
         "--dataset connectome "
@@ -125,6 +130,7 @@ rule connectome_projection_summary:
         "--summary-tex {output.tex} "
         "--summary-csv {output.csv} "
         "--stats-json {output.stats} "
+        "--figure-dir {output.figures} "
 
 
 rule contactome_projection_summary:
@@ -136,6 +142,7 @@ rule contactome_projection_summary:
         tex=CONTACTOME_PROJECTION_TEX,
         csv=CONTACTOME_PROJECTION_CSV,
         stats=CONTACTOME_PROJECTION_STATS_JSON,
+        figures=directory(CONTACTOME_PROJECTION_FIGURE_DIR),
     shell:
         "uv run python analysis/projections/run.py "
         "--dataset contactome "
@@ -145,3 +152,4 @@ rule contactome_projection_summary:
         "--summary-tex {output.tex} "
         "--summary-csv {output.csv} "
         "--stats-json {output.stats} "
+        "--figure-dir {output.figures} "

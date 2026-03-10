@@ -77,6 +77,7 @@ This produces:
 - `results/data/*-projection-summary.tex`
 - `results/data/*-projection-summary.csv`
 - `results/data/*-projection-stats.json`
+- `results/figures/*-projection-milestones/`
 
 The default metric profile is `fast`. It prefers scalable or approximate graph metrics and avoids exhaustive computations such as exact diameter in routine runs.
 
@@ -105,11 +106,8 @@ uv run python analysis/projections/run.py \
   --summary-tex results/data/connectome-projection-summary.tex \
   --summary-csv results/data/connectome-projection-summary.csv \
   --stats-json results/data/connectome-projection-stats.json \
+  --figure-dir results/figures/connectome-projection-milestones
 ```
-
-## Legacy Material
-
-The paired notebook workflow is retired from active use. Legacy notebooks remain archived under `docs/legacy-notebooks/`, but they are no longer part of the supported analysis path.
 
 ## References
 

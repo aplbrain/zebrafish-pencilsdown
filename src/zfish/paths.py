@@ -11,7 +11,6 @@ GENERATED_DATA_DIR = DATA_DIR / "generated"
 RESULTS_DIR = REPO_ROOT / "results"
 RESULTS_DATA_DIR = RESULTS_DIR / "data"
 RESULTS_FIGURES_DIR = RESULTS_DIR / "figures"
-LEGACY_NOTEBOOK_DIR = REPO_ROOT / "docs" / "legacy-notebooks"
 
 
 def ensure_parent(path: Path) -> Path:
@@ -120,4 +119,4 @@ def default_projection_stats_json(dataset: str) -> Path:
 
 
 def default_projection_figure_dir(dataset: str) -> Path:
-    return RESULTS_FIGURES_DIR / f"{dataset}-projection-summary"
+    return RESULTS_FIGURES_DIR / f"{dataset}-projection-milestones"
