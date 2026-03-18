@@ -14,13 +14,14 @@ from zfish.graphs import build_graph_bundles, checkpoint_to_edits, load_checkpoi
 from zfish.invariants import (
     DATASET_CONNECTOME,
     DATASET_CONTACTOME,
+    DATASET_HEMIBRAIN,
     METRIC_PROFILE_FAST,
     METRIC_PROFILE_FULL,
     compute_invariants,
 )
 from zfish.paths import ensure_parent
 
-DATASET_CHOICES = (DATASET_CONNECTOME, DATASET_CONTACTOME)
+DATASET_CHOICES = (DATASET_CONNECTOME, DATASET_CONTACTOME, DATASET_HEMIBRAIN)
 METRIC_PROFILE_CHOICES = (METRIC_PROFILE_FAST, METRIC_PROFILE_FULL)
 
 

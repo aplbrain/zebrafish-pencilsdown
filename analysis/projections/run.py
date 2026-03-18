@@ -11,7 +11,7 @@ SRC_DIR = REPO_ROOT / "src"
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
-from zfish.invariants import DATASET_CONNECTOME, DATASET_CONTACTOME
+from zfish.invariants import DATASET_CONNECTOME, DATASET_CONTACTOME, DATASET_HEMIBRAIN
 from zfish.projections import DEFAULT_MILESTONES, build_projection_results
 from zfish.reporting import (
     build_projection_summary_csv_rows,
@@ -24,7 +24,7 @@ from zfish.reporting import (
     write_text_lines,
 )
 
-DATASET_CHOICES = (DATASET_CONNECTOME, DATASET_CONTACTOME)
+DATASET_CHOICES = (DATASET_CONNECTOME, DATASET_CONTACTOME, DATASET_HEMIBRAIN)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -160,6 +160,7 @@ def main(argv: list[str] | None = None) -> int:
     results = build_projection_results(
         invariants_payload["invariants_per_graph"],
         convergence_payload,
+        invariants_payload["checkpoints"],
         milestones=milestones,
     )
 

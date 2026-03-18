@@ -36,10 +36,11 @@ def sort_projection_results(results: Sequence[dict[str, Any]]) -> list[dict[str,
     return sorted(results, key=_sort_key)
 
 
-def _build_series(values_by_checkpoint: Mapping[str, float]) -> tuple[np.ndarray, np.ndarray]:
-    labels = sorted(values_by_checkpoint, key=checkpoint_to_edits)
-    x = np.array([checkpoint_to_edits(label) for label in labels], dtype=float)
-    y = np.array([float(values_by_checkpoint[label]) for label in labels], dtype=float)
+def _build_series(checkpoints: Mapping[str, int], values_by_checkpoint: Mapping[str, float]) -> tuple[np.ndarray, np.ndarray]:
+    checkpoint_lookup = sorted(checkpoints, key=lambda x: x["edits"])
+    checkpoint_labels, checkpoint_edits = zip(*((x["label"], x["edits"]) for x in checkpoint_lookup))
+    x = np.array(checkpoint_edits, dtype=float)
+    y = np.array([float(values_by_checkpoint[label]) for label in list(checkpoint_labels)], dtype=float)
     return x, y
 
 
@@ -308,10 +309,11 @@ def project_invariant_trajectory(
     invariant: str,
     values_by_checkpoint: Mapping[str, float],
     convergence_entry: Mapping[str, Any] | None,
+    checkpoints: Mapping[str, int],
     *,
     milestones: Sequence[float] = DEFAULT_MILESTONES,
 ) -> dict[str, Any]:
-    x, y = _build_series(values_by_checkpoint)
+    x, y = _build_series(checkpoints, values_by_checkpoint)
     if x.size < 2:
         return {
             "invariant": invariant,
@@ -396,6 +398,7 @@ def project_invariant_trajectory(
 def build_projection_results(
     invariants_per_graph: Mapping[str, Mapping[str, float]],
     convergence_payload: Mapping[str, Any],
+    checkpoints: Mapping[str, int],
     *,
     milestones: Sequence[float] = DEFAULT_MILESTONES,
 ) -> list[dict[str, Any]]:
@@ -408,6 +411,7 @@ def build_projection_results(
             invariant,
             values_by_checkpoint,
             entries.get(invariant),
+            checkpoints=checkpoints,
             milestones=milestones,
         )
         for invariant, values_by_checkpoint in invariants_per_graph.items()

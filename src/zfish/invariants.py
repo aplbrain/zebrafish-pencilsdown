@@ -12,6 +12,7 @@ import rustworkx as rx
 
 DATASET_CONTACTOME = "contactome"
 DATASET_CONNECTOME = "connectome"
+DATASET_HEMIBRAIN = "hemibrain"
 METRIC_PROFILE_FAST = "fast"
 METRIC_PROFILE_FULL = "full"
 

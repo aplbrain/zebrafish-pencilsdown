@@ -4,7 +4,7 @@ import csv
 import json
 import math
 from pathlib import Path
-from typing import Any, Iterable, Literal, Sequence
+from typing import Any, Iterable, Literal, Sequence, Mapping
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -28,7 +28,7 @@ def configure_matplotlib() -> None:
     plt.rcParams["svg.fonttype"] = "none"
     plt.rcParams["pdf.fonttype"] = 42
     plt.rcParams["ps.fonttype"] = 42
-    plt.rcParams["font.family"] = "Roboto"
+    # plt.rcParams["font.family"] = "Roboto"
     plt.rcParams["font.size"] = 10
     plt.rcParams["figure.dpi"] = 150
 
@@ -569,6 +569,7 @@ def render_projection_milestone_bands(
 
 def render_convergence_grids(
     results: Sequence[dict[str, Any]],
+    checkpoints: Mapping[str, int],
     output_dir: Path,
     *,
     plot_exclude: frozenset[str] = PLOT_EXCLUDE,
@@ -577,6 +578,7 @@ def render_convergence_grids(
 ) -> list[Path]:
     configure_matplotlib()
     output_dir.mkdir(parents=True, exist_ok=True)
+    checkpoint_labels, checkpoint_edits = zip(*checkpoints.items())
 
     sorted_results = [
         result
@@ -587,10 +589,12 @@ def render_convergence_grids(
         return []
 
     max_observed = max(float(result["x"].max()) for result in sorted_results)
-    xtick_positions = np.arange(0.0, max_observed + 1e-9, 10_000.0)
-    if xtick_positions.size == 0 or xtick_positions[-1] != max_observed:
-        xtick_positions = np.append(xtick_positions, max_observed)
-    xtick_labels = [f"{int(pos / 1000)}K" for pos in xtick_positions]
+    # xtick_positions = np.arange(0.0, max_observed + 1e-9, 10_000.0)
+    # if xtick_positions.size == 0 or xtick_positions[-1] != max_observed:
+    #     xtick_positions = np.append(xtick_positions, max_observed)
+    xtick_positions = checkpoint_edits
+    # xtick_labels = [f"{int(pos / 1000)}K" for pos in xtick_positions]
+    xtick_labels = checkpoint_edits
     plateau_color = "#1b9e77"
     converging_color = "#d95f02"
     neutral_color = "#666666"
