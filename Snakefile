@@ -15,7 +15,11 @@ CONNECTOME_PROJECTION_TEX = "results/data/connectome-projection-summary.tex"
 CONNECTOME_PROJECTION_CSV = "results/data/connectome-projection-summary.csv"
 CONNECTOME_PROJECTION_STATS_JSON = "results/data/connectome-projection-stats.json"
 CONNECTOME_PROJECTION_FIGURE_DIR = "results/figures/connectome-projection-milestones"
-
+CONNECTOME_FORECASTING_DIR = "results/data/connectome-forecasting/iterations"
+CONNECTOME_FORECASTING_AGGREGATE_CSV = "results/data/connectome-forecasting/forecasting-summary.csv"
+CONNECTOME_FORECASTING_AGGREGATE_MD = "results/data/connectome-forecasting/forecasting-summary.md"
+CONNECTOME_FORECASTING_AGGREGATE_JSON = "results/data/connectome-forecasting/forecasting-summary.json"
+CONNECTOME_FORECASTING_FIGURE_DIR = "results/figures/connectome-forecasting"
 CONTACTOME_SUMMARY_MD = "results/data/contactome-convergence-summary.md"
 CONTACTOME_SUMMARY_TEX = "results/data/contactome-convergence-summary.tex"
 CONTACTOME_STATS_JSON = "results/data/contactome-convergence-stats.json"
@@ -35,7 +39,11 @@ HEMIBRAIN_PROJECTION_TEX = "results/data/hemibrain-projection-summary.tex"
 HEMIBRAIN_PROJECTION_CSV = "results/data/hemibrain-projection-summary.csv"
 HEMIBRAIN_PROJECTION_STATS_JSON = "results/data/hemibrain-projection-stats.json"
 HEMIBRAIN_PROJECTION_FIGURE_DIR = "results/figures/hemibrain-projection-milestones"
-
+HEMIBRAIN_FORECASTING_DIR = "results/data/hemibrain-forecasting/iterations"
+HEMIBRAIN_FORECASTING_AGGREGATE_CSV = "results/data/hemibrain-forecasting/forecasting-summary.csv"
+HEMIBRAIN_FORECASTING_AGGREGATE_MD = "results/data/hemibrain-forecasting/forecasting-summary.md"
+HEMIBRAIN_FORECASTING_AGGREGATE_JSON = "results/data/hemibrain-forecasting/forecasting-summary.json"
+HEMIBRAIN_FORECASTING_FIGURE_DIR = "results/figures/hemibrain-forecasting"
 
 
 rule all:
@@ -51,6 +59,11 @@ rule all:
         CONNECTOME_PROJECTION_CSV,
         CONNECTOME_PROJECTION_STATS_JSON,
         CONNECTOME_PROJECTION_FIGURE_DIR,
+        CONNECTOME_FORECASTING_DIR,
+        CONNECTOME_FORECASTING_AGGREGATE_CSV,
+        CONNECTOME_FORECASTING_AGGREGATE_MD,
+        CONNECTOME_FORECASTING_AGGREGATE_JSON,
+        CONNECTOME_FORECASTING_FIGURE_DIR,
         # CONTACTOME_SUMMARY_MD,
         # CONTACTOME_SUMMARY_TEX,
         # CONTACTOME_STATS_JSON,
@@ -68,7 +81,12 @@ rule all:
         HEMIBRAIN_PROJECTION_TEX,
         HEMIBRAIN_PROJECTION_CSV,
         HEMIBRAIN_PROJECTION_STATS_JSON,
-        HEMIBRAIN_PROJECTION_FIGURE_DIR
+        HEMIBRAIN_PROJECTION_FIGURE_DIR,
+        HEMIBRAIN_FORECASTING_DIR,
+        HEMIBRAIN_FORECASTING_AGGREGATE_CSV,
+        HEMIBRAIN_FORECASTING_AGGREGATE_MD,
+        HEMIBRAIN_FORECASTING_AGGREGATE_JSON,
+        HEMIBRAIN_FORECASTING_FIGURE_DIR
 
 
 rule connectome_invariants:
@@ -172,6 +190,26 @@ rule connectome_projection_summary:
         "--figure-dir {output.figures} "
 
 
+rule connectome_forecasting:
+    input:
+        CONNECTOME_INVARIANTS,
+    output:
+        iterations=directory(CONNECTOME_FORECASTING_DIR),
+        csv=CONNECTOME_FORECASTING_AGGREGATE_CSV,
+        md=CONNECTOME_FORECASTING_AGGREGATE_MD,
+        json=CONNECTOME_FORECASTING_AGGREGATE_JSON,
+        figures=directory(CONNECTOME_FORECASTING_FIGURE_DIR),
+    shell:
+        "uv run python analysis/forecasting/run.py "
+        "--dataset connectome "
+        "--input-json {input} "
+        "--output-dir {output.iterations} "
+        "--aggregate-csv {output.csv} "
+        "--aggregate-md {output.md} "
+        "--aggregate-json {output.json} "
+        "--figure-dir {output.figures}"
+
+
 # rule contactome_projection_summary:
 #     input:
 #         invariants=CONTACTOME_INVARIANTS,
@@ -192,7 +230,6 @@ rule connectome_projection_summary:
 #         "--summary-csv {output.csv} "
 #         "--stats-json {output.stats} "
 #         "--figure-dir {output.figures} "
-
 
 rule hemibrain_projection_summary:
     input:
@@ -215,3 +252,22 @@ rule hemibrain_projection_summary:
         "--stats-json {output.stats} "
         "--figure-dir {output.figures} "
 
+
+rule hemibrain_forecasting:
+    input:
+        HEMIBRAIN_INVARIANTS,
+    output:
+        iterations=directory(HEMIBRAIN_FORECASTING_DIR),
+        csv=HEMIBRAIN_FORECASTING_AGGREGATE_CSV,
+        md=HEMIBRAIN_FORECASTING_AGGREGATE_MD,
+        json=HEMIBRAIN_FORECASTING_AGGREGATE_JSON,
+        figures=directory(HEMIBRAIN_FORECASTING_FIGURE_DIR),
+    shell:
+        "uv run python analysis/forecasting/run.py "
+        "--dataset hemibrain "
+        "--input-json {input} "
+        "--output-dir {output.iterations} "
+        "--aggregate-csv {output.csv} "
+        "--aggregate-md {output.md} "
+        "--aggregate-json {output.json} "
+        "--figure-dir {output.figures}"
