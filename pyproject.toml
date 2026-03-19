@@ -21,8 +21,17 @@ dependencies = [
     "seaborn>=0.13.2",
 ]
 
+[tool.setuptools]
+package-dir = {"" = "src"}
+
 [tool.setuptools.packages.find]
+where = ["src"]
 include = ["zfish*"]
 
-[tool.uv]
-dev-dependencies = ["ipykernel>=6.29.5", "ruff>=0.9.3"]
+[dependency-groups]
+dev = [
+    "ipykernel>=6.29.5",
+    "pytest>=8.4.0",
+    "ruff>=0.9.3",
+    "snakemake>=8.25.0",
+]

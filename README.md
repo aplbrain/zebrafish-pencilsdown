@@ -1,134 +1,116 @@
 # Zebrafish "Pencils-Down" Paper
 
-This repository contains code for the preprocessing and analysis of the "Pencils down" paper exploring the relationship between proofreading effort and connectome/contactome quality.
+This repository contains the checkpoint-generation and graph-analysis code for the zebrafish proofreading study. The active workflow now follows a science-repo layout:
 
-Before the raw data can be analyzed, the raw data must be preprocessed. For details on synaptic connected component relabeling, see [Preprocessing](docs/Preprocessing.md).
+- `data/raw/`: external inputs such as `changes.tsv`, connectome CSVs, and contactome CSVs
+- `data/provided/`: stable project-supplied inputs
+- `data/generated/`: derived intermediates such as component-graph snapshots and invariant JSONs
+- `analysis/`: workflow entrypoints
+- `src/zfish/`: shared Python package
+- `results/data/`: final summary tables
+- `results/figures/`: final figures
+- `Snakefile`: reproducible workflow wiring
 
-## Create timeseries of changes
+`data/` remains ignored in git. Code and `results/` are the tracked outputs.
+
+## Setup
 
 ```bash
-wget https://taurus.agglomeration.ariadne.ai/api/changes.tsv -O changes.tsv
+uv sync --group dev
 ```
 
-Because this file is checked into version control, you should see new lines added in the diff of this file.
+## Checkpoint Workflow
 
-You can now run these three commands:
+Download the Ariadne changelog into `data/raw/`:
 
-### Construct checkpoint changelogs
+```bash
+wget https://taurus.agglomeration.ariadne.ai/api/changes.tsv -O data/raw/changes.tsv
+```
 
-Convert the Ariadne changelog into incremental NetworkX snapshots (stored in `component-graphs/`). The `--step-size` flag controls the cadence of snapshots, and you can disable writing intermediate changelog exports with `--skip-change-logs`:
+Build component-graph snapshots:
 
 ```bash
 uv run python manage.py changelog subsample --step-size 5000
 ```
 
-For example, to make the 50K checkpoint when 0-45 already exist:
-
-```bash
-uv run python manage.py checkpoint upload --skip 5000 --skip 10000 --skip 15000 --skip 20000 --skip 25000 --skip 30000 --skip 35000 --skip 40000 --skip 45000
-```
-
-This command will produce `changes.tsv.#####` files inside of `component-graphs/` where each `#####` is a multiple of `step-size` up to the maximum number of edits in `changes.tsv`. For example, with a `step-size` of `5000` this will generate `changes.tsv.5000`, `changes.tsv.10000`, ..., `changes.tsv.N` where `N` is the largest multiple of `5000` less than or equal to the total number of edits.
-
-This will also generate a final `changes.tsv.#####` file that contains all edits in the original `changes.tsv` and is named with the length of the original file. For example, if `changes.tsv` contains `123456` edits, then a final `changes.tsv.123456` file will be created. This file will not be used for checkpoint generation, but is useful for record-keeping.
-
-### Generate remap dictionaries and upload checkpoints
+Generate remap dictionaries:
 
 ```bash
 uv run python manage.py remap generate
 ```
 
-This command will read the changelog snapshots created in the previous step and generate remap dictionaries (`*.remap.json` files) that map supervoxel IDs to agglomerated segment IDs at each checkpoint. These are stored in the same `component-graphs/` directory.
-
-As a byproduct, this will also generate `component-graphs/change_nx.#####.gexf` files that contain NetworkX-compatible representations of the component graphs at each checkpoint. The connected components of these graphs correspond to the segments present at each checkpoint.
-
-By convention, the _smallest_ ID in each connected component is chosen as the segment ID for that component. Thus, the remap dictionaries map supervoxel IDs to the smallest supervoxel ID in their connected component at each checkpoint.
-
-### Upload checkpoints
+Upload checkpoint channels:
 
 ```bash
 uv run python manage.py checkpoint upload
 ```
 
-This workflow results in the creation of several `agglomeration_checkpoint_####` channels, where each `####` is a checkpoint number corresponding to the number of edits performed to reach this agglomeration threshold.
+These commands now default to `data/raw/changes.tsv` and `data/generated/component-graphs/`. Root-level `changes.tsv` and `component-graphs/` are still accepted as fallbacks during migration.
 
-You can adjust the mip level for reading/writing (`--mip`), override destination chunk sizes (`--chunk-size`), parallelism (`--jobs`), chunk traversal (`--block-size`), source/destination paths (`--supervoxels-path`, `--checkpoint-prefix`, `--checkpoint-stem`), and skip already uploaded edit counts via repeated `--skip` flags.
-
-## For new checkpoints
-
-After re-running `wget` to get the latest changes, there may be new checkpoints to create. Run the three commands above in order, and then you can run these postprocessing steps:
+To generate shuffled controls:
 
 ```bash
-CHECKPOINT=50000
-uv run igneous image downsample s3://cvdb-bossdb-boss/smith2024/zebrafish/agglomeration_checkpoint_${CHECKPOINT} --mip 0 --num-mips 1 --fill-missing --queue q-downsample
-uv run igneous --parallel 8 execute -x q-downsample
-uv run igneous image downsample s3://cvdb-bossdb-boss/smith2024/zebrafish/agglomeration_checkpoint_${CHECKPOINT} --mip 1 --num-mips 6 --fill-missing --volumetric --queue q-downsample
-uv run igneous --parallel 8 execute -x q-downsample
-
-uv run igneous mesh forge s3://cvdb-bossdb-boss/smith2024/zebrafish/agglomeration_checkpoint_${CHECKPOINT} --mip 2 --queue ./q-mesh --sharded
-uv run igneous execute -x ./q-mesh
-
-uv run igneous mesh merge-sharded s3://cvdb-bossdb-boss/smith2024/zebrafish/agglomeration_checkpoint_${CHECKPOINT} --queue ./q-mesh-sharded --nlod 0
-uv run igneous execute -x ./q-mesh-sharded
-```
-
-## Neuroglancer Links
-
-See [Neuroglancer Links](docs/Neuroglancer-Links.md) for visuals.
-
----
-
-## Shuffles
-
-To serve as a control for edit ordering effects, we generate shuffled versions of the agglomeration checkpoints with permuted edit histories.
-
-These permutations cannot be naively random, as that would allow splits to occur before their corresponding merges. For example, if two supervoxels A and B are merged into segment C and then split again later, a naive shuffle could place a nonsensical split of C back into A and B at a prior edit to the merge.
-
-Instead, shuffles are generated as a DAG, where each merge/split operation is a node and edges represent ordering constraints (e.g., a split must occur after its corresponding merge). Any topological sort of this DAG produces a valid edit ordering that respects these constraints, so the default shuffle behavior is to randomly permute the order of operations while preserving these constraints.
-
-### Generating shuffled controls
-
-To build control checkpoints with fully permuted edit histories, request one or more shuffles when subsampling:
-
-```bash
-uv run python manage.py changelog subsample --step-size 5000 --shuffle-count 4 --shuffle-seed 42 --shuffle-mode default
-```
-
-This command writes the canonical snapshots to `component-graphs/` and adds complete random permutations to `component-graphs/shuffle_1/`, `component-graphs/shuffle_2/`, etc. Produce the associated remap dictionaries for a specific shuffle with:
-
-```bash
+uv run python manage.py changelog subsample --step-size 5000 --shuffle-count 4 --shuffle-seed 42
 uv run python manage.py remap generate --shuffle-id 1
+uv run python manage.py checkpoint upload --shuffle-id 1
 ```
 
-The above command should be run, say, four times with `--shuffle-id` values of `1`, `2`, `3`, and `4` to generate remap dictionaries for each shuffle if the original subsample command was run with `--shuffle-count 4`.
+## Analysis Workflow
 
-Upload shuffled checkpoints by selecting the same shuffle identifier (the destination stem defaults to `.../shuffle_1_checkpoint_` when not overridden):
+Put one ordered connectome series under `data/raw/connectomes/original_order/` and one ordered contactome series under `data/raw/contactomes/original_order/`. The loaders also accept the legacy `data/connectomes` and `data/contactomes` paths for one migration cycle.
+
+Run the full analysis with Snakemake:
 
 ```bash
-uv run python manage.py checkpoint upload \
-  --shuffle-id 1 \
-  --mip 2 \
-  --supervoxels-path precomputed://s3://cvdb-bossdb-boss/smith2024/zebrafish/supervoxels/ \
-  --checkpoint-prefix precomputed://s3://cvdb-bossdb-boss/martinez2026/zebrafish/
+uv run snakemake --cores 1
 ```
 
-Each execution of this command uploads a full set of checkpoints for the specified shuffle (i.e., `shuffle_1_checkpoint_5000`, `shuffle_1_checkpoint_10000`, etc.) all uploaded sequentially.
+This produces:
 
-Repeat for `shuffle_2`, etc., to create `shuffle_X_checkpoint_5000`, `shuffle_X_checkpoint_10000`, and so on.
+- `data/generated/connectome/invariants.json`
+- `data/generated/contactome/invariants.json`
+- `results/data/*-convergence-summary.md`
+- `results/data/*-convergence-summary.tex`
+- `results/data/*-convergence-stats.json`
+- `results/figures/*-convergence/`
+- `results/data/*-projection-summary.md`
+- `results/data/*-projection-summary.tex`
+- `results/data/*-projection-summary.csv`
+- `results/data/*-projection-stats.json`
+- `results/figures/*-projection-milestones/`
 
-Use `--shuffle=naive` on the `changelog subsample` command to revert to fully random permutation (not recommended).
+The default metric profile is `fast`. It prefers scalable or approximate graph metrics and avoids exhaustive computations such as exact diameter in routine runs.
 
-# Generating Contactomes & Connectomes
-
-Use the [Cloudome](https://github.com/aplbrain/cloudome) tool to generate contactomes and connectomes from the agglomeration checkpoints and shuffles.
-
-# Pulling the latest connectomes and contactomes for analysis
-
-The Martinez 2026 et al. paper has published the latest network edgelists. These can be downloaded with:
+You can run workflow steps directly while developing:
 
 ```bash
-aws s3 sync s3://cvdb-bossdb-boss/smith2024/pencils-down/ ./data/graphs/
-aws s3 sync s3://cvdb-bossdb-boss/martinez2026/pencils-down/ ./data/shuffles/
+uv run python analysis/invariants/run.py \
+  --dataset connectome \
+  --input-dir data/raw/connectomes/original_order \
+  --output-json data/generated/connectome/invariants.json \
+  --metric-profile fast
+
+uv run python analysis/convergence/run.py \
+  --dataset connectome \
+  --input-json data/generated/connectome/invariants.json \
+  --summary-md results/data/connectome-convergence-summary.md \
+  --summary-tex results/data/connectome-convergence-summary.tex \
+  --stats-json results/data/connectome-convergence-stats.json \
+  --figure-dir results/figures/connectome-convergence
+
+uv run python analysis/projections/run.py \
+  --dataset connectome \
+  --input-json data/generated/connectome/invariants.json \
+  --convergence-stats results/data/connectome-convergence-stats.json \
+  --summary-md results/data/connectome-projection-summary.md \
+  --summary-tex results/data/connectome-projection-summary.tex \
+  --summary-csv results/data/connectome-projection-summary.csv \
+  --stats-json results/data/connectome-projection-stats.json \
+  --figure-dir results/figures/connectome-projection-milestones
 ```
 
-This has the result of creating files at, e.g., `data/graphs/s3/s1/s1_c15_connectome_120925.csv`.
+## References
+
+- [Preprocessing](docs/Preprocessing.md)
+- [Updating Checkpoints](docs/Updating-Checkpoints.md)
+- [Neuroglancer Links](docs/Neuroglancer-Links.md)

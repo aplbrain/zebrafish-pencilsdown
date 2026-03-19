@@ -1,27 +1,44 @@
-# Updating checkpoint channels after new edits are made
+# Updating Checkpoints
 
-# 1. Download the latest changes.tsv file from the Taurus API
+## 1. Refresh the changelog input
 
 ```bash
-wget https://taurus.agglomeration.ariadne.ai/api/changes.tsv -O changes.tsv
+wget https://taurus.agglomeration.ariadne.ai/api/changes.tsv -O data/raw/changes.tsv
 ```
 
-Because this file is checked into version control, you should see new lines added in the diff of this file.
+## 2. Generate component-graph snapshots
 
-# 2. Update the checkpoint channels
-
-In `2-Create-Checkpoint-Channels.ipynb` you can add previously existing checkpoints to the "Ignore" list on the line,
-
-```python
-if editcount in [5000, 10000, 35000, 25000, 15000, 20000, 30000, 35000, 40000]:
+```bash
+uv run python manage.py changelog subsample --step-size 5000
 ```
 
-to avoid re-creating those checkpoints.
+This writes changelog excerpts, component graphs, and later remap JSONs under `data/generated/component-graphs/`.
 
-You can now run these three notebooks in order:
+## 3. Build remap dictionaries
 
--   0-Subsample-Changelog.ipynb
--   1-Create-Remap-Dicts.ipynb
--   2-Create-Checkpoint-Channels.ipynb
+```bash
+uv run python manage.py remap generate
+```
 
-This will result in the creation of several `agglomeration_checkpoint_####` channels, where each `####` is a checkpoint number corresponding to the number of edits performed to reach this agglomeration threshold.
+## 4. Upload checkpoint channels
+
+```bash
+uv run python manage.py checkpoint upload
+```
+
+Use repeated `--skip` flags if you only need to create new checkpoints.
+
+## 5. Generate connectomes and contactomes
+
+Run Cloudome on the uploaded checkpoints and place the ordered series under:
+
+- `data/raw/connectomes/original_order/`
+- `data/raw/contactomes/original_order/`
+
+## 6. Run the analysis workflow
+
+```bash
+uv run snakemake --cores 1
+```
+
+The active analysis is now script- and Snakemake-driven. The old notebooks are retained only as legacy references in `docs/legacy-notebooks/`.
