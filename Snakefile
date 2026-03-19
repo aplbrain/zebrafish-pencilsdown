@@ -4,7 +4,7 @@ CONTACTOME_INPUT_DIR = "data/raw/contactomes/original_order"
 
 CONNECTOME_INVARIANTS = "data/generated/connectome/invariants.json"
 CONTACTOME_INVARIANTS = "data/generated/contactome/invariants.json"
-HEMIBRAIN_INVARIANTS = "data/raw/hemibrain/invariants.json"
+HEMIBRAIN_INVARIANTS = "src/hemibrain/invariants.json"
 
 CONNECTOME_SUMMARY_MD = "results/data/connectome-convergence-summary.md"
 CONNECTOME_SUMMARY_TEX = "results/data/connectome-convergence-summary.tex"
@@ -51,15 +51,15 @@ rule all:
         CONNECTOME_PROJECTION_CSV,
         CONNECTOME_PROJECTION_STATS_JSON,
         CONNECTOME_PROJECTION_FIGURE_DIR,
-        CONTACTOME_SUMMARY_MD,
-        CONTACTOME_SUMMARY_TEX,
-        CONTACTOME_STATS_JSON,
-        CONTACTOME_FIGURE_DIR,
-        CONTACTOME_PROJECTION_MD,
-        CONTACTOME_PROJECTION_TEX,
-        CONTACTOME_PROJECTION_CSV,
-        CONTACTOME_PROJECTION_STATS_JSON,
-        CONTACTOME_PROJECTION_FIGURE_DIR,
+        # CONTACTOME_SUMMARY_MD,
+        # CONTACTOME_SUMMARY_TEX,
+        # CONTACTOME_STATS_JSON,
+        # CONTACTOME_FIGURE_DIR,
+        # CONTACTOME_PROJECTION_MD,
+        # CONTACTOME_PROJECTION_TEX,
+        # CONTACTOME_PROJECTION_CSV,
+        # CONTACTOME_PROJECTION_STATS_JSON,
+        # CONTACTOME_PROJECTION_FIGURE_DIR,
         HEMIBRAIN_SUMMARY_MD,
         HEMIBRAIN_SUMMARY_TEX,
         HEMIBRAIN_STATS_JSON,
