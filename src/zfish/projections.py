@@ -15,10 +15,8 @@ from .graphs import checkpoint_to_edits
 
 
 DEFAULT_MILESTONES: tuple[float, ...] = (0.50, 0.80, 0.90, 0.95, 0.99)
-
 BASIS_PLATEAU_SIGNAL = "plateau_signal"
 BASIS_MONOTONE_TAIL = "monotone_tail"
-
 
 def milestone_label(fraction: float) -> str:
     return f"{int(round(fraction * 100))}%"
@@ -417,6 +415,8 @@ def build_projection_results(
         for invariant, values_by_checkpoint in invariants_per_graph.items()
     ]
     return sort_projection_results(results)
+
+
 
 
 __all__ = [

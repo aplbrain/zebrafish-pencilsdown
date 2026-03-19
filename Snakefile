@@ -60,6 +60,15 @@ rule all:
         CONTACTOME_PROJECTION_CSV,
         CONTACTOME_PROJECTION_STATS_JSON,
         CONTACTOME_PROJECTION_FIGURE_DIR,
+        HEMIBRAIN_SUMMARY_MD,
+        HEMIBRAIN_SUMMARY_TEX,
+        HEMIBRAIN_STATS_JSON,
+        HEMIBRAIN_FIGURE_DIR,
+        HEMIBRAIN_PROJECTION_MD,
+        HEMIBRAIN_PROJECTION_TEX,
+        HEMIBRAIN_PROJECTION_CSV,
+        HEMIBRAIN_PROJECTION_STATS_JSON,
+        HEMIBRAIN_PROJECTION_FIGURE_DIR
 
 
 rule connectome_invariants:
@@ -75,17 +84,17 @@ rule connectome_invariants:
         "--metric-profile fast"
 
 
-rule contactome_invariants:
-    input:
-        CONTACTOME_INPUT_DIR,
-    output:
-        CONTACTOME_INVARIANTS,
-    shell:
-        "uv run python analysis/invariants/run.py "
-        "--dataset contactome "
-        "--input-dir {input} "
-        "--output-json {output} "
-        "--metric-profile fast"
+# rule contactome_invariants:
+#     input:
+#         CONTACTOME_INPUT_DIR,
+#     output:
+#         CONTACTOME_INVARIANTS,
+#     shell:
+#         "uv run python analysis/invariants/run.py "
+#         "--dataset contactome "
+#         "--input-dir {input} "
+#         "--output-json {output} "
+#         "--metric-profile fast"
 
 
 rule connectome_convergence:
@@ -106,22 +115,22 @@ rule connectome_convergence:
         "--figure-dir {output.figures}"
 
 
-rule contactome_convergence:
-    input:
-        CONTACTOME_INVARIANTS,
-    output:
-        md=CONTACTOME_SUMMARY_MD,
-        tex=CONTACTOME_SUMMARY_TEX,
-        stats=CONTACTOME_STATS_JSON,
-        figures=directory(CONTACTOME_FIGURE_DIR),
-    shell:
-        "uv run python analysis/convergence/run.py "
-        "--dataset contactome "
-        "--input-json {input} "
-        "--summary-md {output.md} "
-        "--summary-tex {output.tex} "
-        "--stats-json {output.stats} "
-        "--figure-dir {output.figures}"
+# rule contactome_convergence:
+#     input:
+#         CONTACTOME_INVARIANTS,
+#     output:
+#         md=CONTACTOME_SUMMARY_MD,
+#         tex=CONTACTOME_SUMMARY_TEX,
+#         stats=CONTACTOME_STATS_JSON,
+#         figures=directory(CONTACTOME_FIGURE_DIR),
+#     shell:
+#         "uv run python analysis/convergence/run.py "
+#         "--dataset contactome "
+#         "--input-json {input} "
+#         "--summary-md {output.md} "
+#         "--summary-tex {output.tex} "
+#         "--stats-json {output.stats} "
+#         "--figure-dir {output.figures}"
 
 
 rule hemibrain_convergence:
@@ -163,26 +172,26 @@ rule connectome_projection_summary:
         "--figure-dir {output.figures} "
 
 
-rule contactome_projection_summary:
-    input:
-        invariants=CONTACTOME_INVARIANTS,
-        convergence=CONTACTOME_STATS_JSON,
-    output:
-        md=CONTACTOME_PROJECTION_MD,
-        tex=CONTACTOME_PROJECTION_TEX,
-        csv=CONTACTOME_PROJECTION_CSV,
-        stats=CONTACTOME_PROJECTION_STATS_JSON,
-        figures=directory(CONTACTOME_PROJECTION_FIGURE_DIR),
-    shell:
-        "uv run python analysis/projections/run.py "
-        "--dataset contactome "
-        "--input-json {input.invariants} "
-        "--convergence-stats {input.convergence} "
-        "--summary-md {output.md} "
-        "--summary-tex {output.tex} "
-        "--summary-csv {output.csv} "
-        "--stats-json {output.stats} "
-        "--figure-dir {output.figures} "
+# rule contactome_projection_summary:
+#     input:
+#         invariants=CONTACTOME_INVARIANTS,
+#         convergence=CONTACTOME_STATS_JSON,
+#     output:
+#         md=CONTACTOME_PROJECTION_MD,
+#         tex=CONTACTOME_PROJECTION_TEX,
+#         csv=CONTACTOME_PROJECTION_CSV,
+#         stats=CONTACTOME_PROJECTION_STATS_JSON,
+#         figures=directory(CONTACTOME_PROJECTION_FIGURE_DIR),
+#     shell:
+#         "uv run python analysis/projections/run.py "
+#         "--dataset contactome "
+#         "--input-json {input.invariants} "
+#         "--convergence-stats {input.convergence} "
+#         "--summary-md {output.md} "
+#         "--summary-tex {output.tex} "
+#         "--summary-csv {output.csv} "
+#         "--stats-json {output.stats} "
+#         "--figure-dir {output.figures} "
 
 
 rule hemibrain_projection_summary:
@@ -206,4 +215,3 @@ rule hemibrain_projection_summary:
         "--stats-json {output.stats} "
         "--figure-dir {output.figures} "
 
-# TODO: add shuffles too
