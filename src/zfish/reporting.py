@@ -4,7 +4,7 @@ import csv
 import json
 import math
 from pathlib import Path
-from typing import Any, Iterable, Literal, Sequence
+from typing import Any, Iterable, Literal, Sequence, Mapping
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -22,13 +22,14 @@ from .projections import (
     milestone_label,
     sort_projection_results,
 )
+from .invariants import invariant_ylabel
 
 
 def configure_matplotlib() -> None:
     plt.rcParams["svg.fonttype"] = "none"
     plt.rcParams["pdf.fonttype"] = 42
     plt.rcParams["ps.fonttype"] = 42
-    plt.rcParams["font.family"] = "Roboto"
+    # plt.rcParams["font.family"] = "Roboto"
     plt.rcParams["font.size"] = 10
     plt.rcParams["figure.dpi"] = 150
 
@@ -459,8 +460,8 @@ def render_projection_milestone_bands(
     fig, ax = plt.subplots(figsize=(8.5, 5.0))
 
     basis_colors = {
-        BASIS_MONOTONE_TAIL: "#2c7fb8",
-        BASIS_PLATEAU_SIGNAL: "#d95f02",
+        BASIS_MONOTONE_TAIL: "#d95f02",
+        BASIS_PLATEAU_SIGNAL: "#2c7fb8",
     }
     for result in projected_results:
         y_values = np.array(
@@ -483,6 +484,18 @@ def render_projection_milestone_bands(
             alpha=0.35,
             marker="o",
             markersize=3.5,
+        )
+        last_valid_idx = int(np.where(valid)[0][-1])
+        ax.annotate(
+            invariant_ylabel(result["invariant"]),
+            (x_positions[last_valid_idx], y_values[last_valid_idx]),
+            textcoords="offset points",
+            xytext=(4, 0),
+            ha="left",
+            va="center",
+            fontsize=7,
+            color=basis_colors[result["basis"]],
+            alpha=0.85,
         )
 
     valid_mean = np.isfinite(mean_values)
@@ -534,15 +547,37 @@ def render_projection_milestone_bands(
             },
         )
 
-    ax.set_title(f"{dataset.title()} Projection Milestones")
+    # ax.set_title(f"{dataset.title()} Projection Milestones")
     ax.set_xlabel("Percent of projected final value")
     ax.set_ylabel("Edits")
+    x_span = float(np.ptp(x_positions)) if x_positions.size > 1 else 1.0
+    x_right_pad = max(2.0, 0.08 * x_span)
+    ax.set_xlim(float(np.min(x_positions)), float(np.max(x_positions) + x_right_pad))
+    ax.set_ylim(bottom=0.0)
     ax.set_xticks(x_positions)
     ax.set_xticklabels([f"{int(value)}%" for value in x_positions])
 
     y_ticks = ax.get_yticks()
     ax.set_yticks(y_ticks)
     ax.set_yticklabels([_format_k_edits(value) for value in y_ticks])
+
+    reference_lines = {
+        "hemibrain": 1_732_048.0,
+        "connectome": 50_000.0,
+        "contactome": 50_000.0,
+        "zebrafish": 50_000.0,
+    }
+    reference_value = reference_lines.get(dataset.lower())
+    if reference_value is not None:
+        ax.axhline(
+            reference_value,
+            color="#4d4d4d",
+            linestyle=":",
+            linewidth=1.2,
+            alpha=0.9,
+            label=f"Reference ({_format_k_edits(reference_value)} edits)",
+        )
+
     ax.grid(True, axis="y", linestyle=":", linewidth=0.7)
     ax.legend(frameon=False, loc="upper left")
     ax.text(
@@ -569,6 +604,7 @@ def render_projection_milestone_bands(
 
 def render_convergence_grids(
     results: Sequence[dict[str, Any]],
+    checkpoints: Mapping[str, int],
     output_dir: Path,
     *,
     plot_exclude: frozenset[str] = PLOT_EXCLUDE,
@@ -577,6 +613,7 @@ def render_convergence_grids(
 ) -> list[Path]:
     configure_matplotlib()
     output_dir.mkdir(parents=True, exist_ok=True)
+    checkpoint_labels, checkpoint_edits = zip(*checkpoints.items())
 
     sorted_results = [
         result
@@ -587,10 +624,12 @@ def render_convergence_grids(
         return []
 
     max_observed = max(float(result["x"].max()) for result in sorted_results)
-    xtick_positions = np.arange(0.0, max_observed + 1e-9, 10_000.0)
-    if xtick_positions.size == 0 or xtick_positions[-1] != max_observed:
-        xtick_positions = np.append(xtick_positions, max_observed)
-    xtick_labels = [f"{int(pos / 1000)}K" for pos in xtick_positions]
+    # xtick_positions = np.arange(0.0, max_observed + 1e-9, 10_000.0)
+    # if xtick_positions.size == 0 or xtick_positions[-1] != max_observed:
+    #     xtick_positions = np.append(xtick_positions, max_observed)
+    xtick_positions = checkpoint_edits
+    # xtick_labels = [f"{int(pos / 1000)}K" for pos in xtick_positions]
+    xtick_labels = checkpoint_edits
     plateau_color = "#1b9e77"
     converging_color = "#d95f02"
     neutral_color = "#666666"
@@ -645,7 +684,7 @@ def render_convergence_grids(
                     markersize=3.5,
                 )
 
-            ax.set_title(result["invariant"])
+            ax.set_title(invariant_ylabel(result["invariant"]))
             ax.set_xlim(0, max_observed)
             ax.set_xticks(xtick_positions)
             ax.set_xticklabels(xtick_labels, rotation=90)

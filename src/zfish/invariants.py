@@ -12,6 +12,7 @@ import rustworkx as rx
 
 DATASET_CONTACTOME = "contactome"
 DATASET_CONNECTOME = "connectome"
+DATASET_HEMIBRAIN = "hemibrain"
 METRIC_PROFILE_FAST = "fast"
 METRIC_PROFILE_FULL = "full"
 
@@ -574,6 +575,17 @@ _INVARIANT_SPECS: tuple[InvariantSpec, ...] = (
 )
 
 
+_INVARIANT_YLABELS: dict[str, str] = {
+    spec.name: spec.ylabel
+    for spec in _INVARIANT_SPECS
+    if spec.ylabel
+}
+
+
+def invariant_ylabel(name: str) -> str:
+    return _INVARIANT_YLABELS.get(name, name)
+
+
 def select_invariants(
     dataset: str,
     *,
@@ -649,6 +661,7 @@ __all__ = [
     "DATASET_CONNECTOME",
     "METRIC_PROFILE_FAST",
     "METRIC_PROFILE_FULL",
+    "invariant_ylabel",
     "select_invariants",
     "compute_invariants",
 ]

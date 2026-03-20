@@ -6,7 +6,9 @@ This repository contains the checkpoint-generation and graph-analysis code for t
 - `data/provided/`: stable project-supplied inputs
 - `data/generated/`: derived intermediates such as component-graph snapshots and invariant JSONs
 - `analysis/`: workflow entrypoints
+- `notebooks/`: legacy notebooks that are useful to keep around
 - `src/zfish/`: shared Python package
+- `src/hemibrain/`: standalone slurm scripts for Hemibrain analysis
 - `results/data/`: final summary tables
 - `results/figures/`: final figures
 - `Snakefile`: reproducible workflow wiring

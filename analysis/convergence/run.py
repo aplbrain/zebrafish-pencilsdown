@@ -26,7 +26,7 @@ from zfish.convergence import (
     analyze_invariants,
     compute_checkpoint_metadata,
 )
-from zfish.invariants import DATASET_CONNECTOME, DATASET_CONTACTOME
+from zfish.invariants import DATASET_CONNECTOME, DATASET_CONTACTOME, DATASET_HEMIBRAIN
 from zfish.reporting import (
     build_convergence_summary_lines,
     convergence_stats_payload,
@@ -36,7 +36,7 @@ from zfish.reporting import (
     write_text_lines,
 )
 
-DATASET_CHOICES = (DATASET_CONNECTOME, DATASET_CONTACTOME)
+DATASET_CHOICES = (DATASET_CONNECTOME, DATASET_CONTACTOME, DATASET_HEMIBRAIN)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -212,9 +212,12 @@ def main(argv: list[str] | None = None) -> int:
 
     payload = _load_invariants_payload(args.input_json)
     invariants_per_graph = payload["invariants_per_graph"]
-    checkpoint_labels, _checkpoint_edits, checkpoint_lookup = compute_checkpoint_metadata(
-        invariants_per_graph
-    )
+    # checkpoint_labels, _checkpoint_edits, checkpoint_lookup = compute_checkpoint_metadata(
+    #     invariants_per_graph
+    # )
+    checkpoint_lookup = sorted(payload["checkpoints"], key=lambda x: x["edits"])
+    checkpoint_labels, checkpoint_edits = zip(*((x["label"], x["edits"]) for x in checkpoint_lookup))
+    checkpoint_lookup = dict(zip(checkpoint_labels, checkpoint_edits))
     results, skipped = analyze_invariants(
         invariants_per_graph,
         checkpoint_labels,
@@ -245,7 +248,7 @@ def main(argv: list[str] | None = None) -> int:
         _build_latex_summary(args.dataset, results, skipped),
     )
 
-    figure_paths = render_convergence_grids(results, args.figure_dir)
+    figure_paths = render_convergence_grids(results, checkpoint_lookup, args.figure_dir)
     stats_payload = convergence_stats_payload(args.dataset, results)
     stats_payload["input_json"] = str(args.input_json)
     stats_payload["metric_profile"] = payload.get("metric_profile")
