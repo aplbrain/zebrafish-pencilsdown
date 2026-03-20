@@ -546,7 +546,7 @@ _INVARIANT_SPECS: tuple[InvariantSpec, ...] = (
         func=RxInvariants.degree_entropy,
         ylabel="Degree Entropy",
         datasets=frozenset({DATASET_CONNECTOME}),
-        fast_enabled=False,
+        fast_enabled=True,
     ),
     InvariantSpec(
         name="reciprocity",

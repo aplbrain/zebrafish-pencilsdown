@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Iterable, Literal, Sequence, Mapping
 
 import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
 import numpy as np
 
 from .convergence import (
@@ -463,6 +464,11 @@ def render_projection_milestone_bands(
         BASIS_MONOTONE_TAIL: "#d95f02",
         BASIS_PLATEAU_SIGNAL: "#2c7fb8",
     }
+    basis_labels = {
+        BASIS_MONOTONE_TAIL: "Monotone-tail projections",
+        BASIS_PLATEAU_SIGNAL: "Plateau-signal projections",
+    }
+    legend_seen_bases: set[str] = set()
     for result in projected_results:
         y_values = np.array(
             [
@@ -476,14 +482,20 @@ def render_projection_milestone_bands(
         valid = np.isfinite(y_values)
         if not np.any(valid):
             continue
+        basis = result["basis"]
+        line_label = (
+            basis_labels[basis] if basis not in legend_seen_bases else "_nolegend_"
+        )
+        legend_seen_bases.add(basis)
         ax.plot(
             x_positions[valid],
             y_values[valid],
-            color=basis_colors[result["basis"]],
+            color=basis_colors[basis],
             linewidth=1.1,
             alpha=0.35,
             marker="o",
             markersize=3.5,
+            label=line_label,
         )
         last_valid_idx = int(np.where(valid)[0][-1])
         ax.annotate(
@@ -511,7 +523,7 @@ def render_projection_milestone_bands(
         upper[valid_mean],
         color="#4daf4a",
         alpha=0.18,
-        label="Mean ± 1 SD",
+        label="_nolegend_",
     )
     ax.errorbar(
         x_positions[valid_mean],
@@ -522,7 +534,7 @@ def render_projection_milestone_bands(
         marker="o",
         markersize=5.5,
         capsize=4,
-        label="Mean edit",
+        label="Mean edit ± 1 SD",
     )
 
     for x_value, mean_value, std_value in zip(
@@ -559,15 +571,16 @@ def render_projection_milestone_bands(
 
     y_ticks = ax.get_yticks()
     ax.set_yticks(y_ticks)
-    ax.set_yticklabels([_format_k_edits(value) for value in y_ticks])
+    # ax.set_yticklabels([_format_k_edits(value) for value in y_ticks])
 
     reference_lines = {
-        "hemibrain": 1_732_048.0,
-        "connectome": 50_000.0,
-        "contactome": 50_000.0,
-        "zebrafish": 50_000.0,
+        "hemibrain": 1_700_478,
+        "connectome": 50_000,
+        "contactome": 50_000,
+        "zebrafish": 50_000,
     }
-    reference_value = reference_lines.get(dataset.lower())
+    dataset_key = dataset.lower()
+    reference_value = reference_lines.get(dataset_key)
     if reference_value is not None:
         ax.axhline(
             reference_value,
@@ -575,10 +588,34 @@ def render_projection_milestone_bands(
             linestyle=":",
             linewidth=1.2,
             alpha=0.9,
-            label=f"Reference ({_format_k_edits(reference_value)} edits)",
+        )
+        x_min, x_max = ax.get_xlim()
+        x_span = x_max - x_min
+        x_text = x_min + 0.01 * x_span
+        reference_label = (
+            "Hemibrain v1.2"
+            if dataset_key == "hemibrain"
+            else "Current number of edits committed"
+        )
+        ax.text(
+            x_text,
+            reference_value,
+            reference_label,
+            ha="left",
+            va="bottom",
+            fontsize=8,
+            color="#4d4d4d",
+            bbox={
+                "boxstyle": "round,pad=0.18",
+                "facecolor": "white",
+                "edgecolor": "none",
+                "alpha": 0.85,
+            },
         )
 
     ax.grid(True, axis="y", linestyle=":", linewidth=0.7)
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
     ax.legend(frameon=False, loc="upper left")
     ax.text(
         0.98,
@@ -606,6 +643,7 @@ def render_convergence_grids(
     results: Sequence[dict[str, Any]],
     checkpoints: Mapping[str, int],
     output_dir: Path,
+    dataset: str | None = None,
     *,
     plot_exclude: frozenset[str] = PLOT_EXCLUDE,
     cols: int = 5,
@@ -624,12 +662,18 @@ def render_convergence_grids(
         return []
 
     max_observed = max(float(result["x"].max()) for result in sorted_results)
-    # xtick_positions = np.arange(0.0, max_observed + 1e-9, 10_000.0)
-    # if xtick_positions.size == 0 or xtick_positions[-1] != max_observed:
-    #     xtick_positions = np.append(xtick_positions, max_observed)
-    xtick_positions = checkpoint_edits
-    # xtick_labels = [f"{int(pos / 1000)}K" for pos in xtick_positions]
-    xtick_labels = checkpoint_edits
+    dataset_key = (dataset or "").lower()
+    special_position: float | None = None
+    special_line_color = "#8c510a"
+    max_x_for_plot = max_observed
+    if dataset_key == "hemibrain":
+        special_position = 1_700_478.0
+        max_x_for_plot = max(max_observed, special_position)
+        xtick_positions = np.arange(0.0, max_x_for_plot + 200_000.0, 200_000.0, dtype=float)
+        xtick_labels = [f"{pos / 1_000_000:.1f}M" for pos in xtick_positions]
+    else:
+        xtick_positions = np.array(checkpoint_edits, dtype=float)
+        xtick_labels = [f"{int(pos / 1000)}K" for pos in xtick_positions]
     plateau_color = "#1b9e77"
     converging_color = "#d95f02"
     neutral_color = "#666666"
@@ -651,6 +695,15 @@ def render_convergence_grids(
             behavior_edit = result["behavior_edit"]
 
             ax.plot(x, y, color=series_color, linewidth=1.2, marker="o", markersize=3.5)
+
+            if special_position is not None:
+                ax.axvline(
+                    special_position,
+                    color=special_line_color,
+                    linestyle=":",
+                    linewidth=1.2,
+                    alpha=0.95,
+                )
 
             if status == STATUS_PROJECTED_PLATEAU and behavior_edit is not None:
                 ax.axvspan(behavior_edit, float(x.max()), color=plateau_color, alpha=0.08)
@@ -685,7 +738,7 @@ def render_convergence_grids(
                 )
 
             ax.set_title(invariant_ylabel(result["invariant"]))
-            ax.set_xlim(0, max_observed)
+            ax.set_xlim(0, max_x_for_plot)
             ax.set_xticks(xtick_positions)
             ax.set_xticklabels(xtick_labels, rotation=90)
             ax.tick_params(axis="y", labelrotation=45)
@@ -716,7 +769,26 @@ def render_convergence_grids(
         for ax in axes[len(group) :]:
             ax.axis("off")
 
-        fig.tight_layout(rect=(0, 0, 1, 1))
+        if special_position is not None:
+            fig.legend(
+                handles=[
+                    Line2D(
+                        [0],
+                        [0],
+                        color=special_line_color,
+                        linestyle=":",
+                        linewidth=1.2,
+                        label="Hemibrain v1.2",
+                    )
+                ],
+                loc="lower center",
+                frameon=False,
+                fontsize=8,
+                bbox_to_anchor=(0.5, -0.015),
+            )
+            fig.tight_layout(rect=(0, 0.06, 1, 1))
+        else:
+            fig.tight_layout(rect=(0, 0, 1, 1))
         stem = output_dir / f"convergence-grid-{group_index:02d}"
         for fmt in formats:
             output_path = stem.with_suffix(f".{fmt}")
