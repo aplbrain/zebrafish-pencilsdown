@@ -653,11 +653,14 @@ def render_convergence_grids(
     output_dir.mkdir(parents=True, exist_ok=True)
     checkpoint_labels, checkpoint_edits = zip(*checkpoints.items())
 
-    sorted_results = [
-        result
-        for result in sort_results(results)
-        if result["invariant"] not in plot_exclude
-    ]
+    sorted_results = sorted(
+        (
+            result
+            for result in results
+            if result["invariant"] not in plot_exclude
+        ),
+        key=lambda result: invariant_ylabel(result["invariant"]).lower(),
+    )
     if not sorted_results:
         return []
 
