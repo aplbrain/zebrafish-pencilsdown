@@ -49,7 +49,7 @@
     }
   ],
   "invariants_per_graph": {
-    "average_clustering": {
+    "average_clustering_approx": {
       "28841c8277e044a7b187dda03e18da13": 0.11936348895631374,
       "305b514e13d0411c8fe6c789935e7030": 0.12915717807997487,
       "a0dfa4f260244946b7abbab4dcd2cc86": 0.13306122667113365,

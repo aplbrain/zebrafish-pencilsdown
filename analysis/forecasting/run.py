@@ -421,7 +421,6 @@ def _render_forecasting_summary_figure(
             alpha=0.95,
         )
 
-    ax.set_title(f"{dataset.title()} Forecasting Summary", fontsize=9, pad=4)
     ax.set_xlabel("Projection milestone (%)", fontsize=8)
     ax.set_ylabel("Mean edits", fontsize=8)
     ax.set_xticks(x_positions, milestone_labels)

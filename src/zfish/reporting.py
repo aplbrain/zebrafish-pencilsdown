@@ -740,7 +740,7 @@ def render_convergence_grids(
                     markersize=3.5,
                 )
 
-            ax.set_title(invariant_ylabel(result["invariant"]))
+            ax.set_title(invariant_ylabel(result["invariant"]), fontsize="small")
             ax.set_xlim(0, max_x_for_plot)
             ax.set_xticks(xtick_positions)
             ax.set_xticklabels(xtick_labels, rotation=90)
