@@ -248,7 +248,7 @@ def main(argv: list[str] | None = None) -> int:
         _build_latex_summary(args.dataset, results, skipped),
     )
 
-    figure_paths = render_convergence_grids(results, checkpoint_lookup, args.figure_dir)
+    figure_paths = render_convergence_grids(results, checkpoint_lookup, args.figure_dir, dataset=args.dataset)
     stats_payload = convergence_stats_payload(args.dataset, results)
     stats_payload["input_json"] = str(args.input_json)
     stats_payload["metric_profile"] = payload.get("metric_profile")

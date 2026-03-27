@@ -506,7 +506,7 @@ _INVARIANT_SPECS: tuple[InvariantSpec, ...] = (
     InvariantSpec(
         name="diameter_approx",
         func=RxInvariants.diameter_approx,
-        ylabel="Approx. Diameter",
+        ylabel="Diameter (Approx.)",
         default_on="largest_strong_component_graph",
         datasets=frozenset({DATASET_CONNECTOME}),
     ),
@@ -546,7 +546,7 @@ _INVARIANT_SPECS: tuple[InvariantSpec, ...] = (
         func=RxInvariants.degree_entropy,
         ylabel="Degree Entropy",
         datasets=frozenset({DATASET_CONNECTOME}),
-        fast_enabled=False,
+        fast_enabled=True,
     ),
     InvariantSpec(
         name="reciprocity",
@@ -572,6 +572,14 @@ _INVARIANT_SPECS: tuple[InvariantSpec, ...] = (
         ylabel="Degree Gini",
         datasets=frozenset({DATASET_CONNECTOME}),
     ),
+    InvariantSpec(
+        name="average_clustering_approx",
+        func=RxInvariants.average_clustering,
+        ylabel="Average Clustering (Approx.)",
+        datasets=frozenset({DATASET_CONNECTOME}),
+        on_overrides={DATASET_CONTACTOME: "undirected_graph"},
+        fast_enabled=False,
+    )
 )
 
 
