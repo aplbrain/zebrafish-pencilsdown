@@ -1,6 +1,6 @@
-# Zebrafish "Pencils-Down" Paper
+# Pencils Down Paper
 
-This repository contains the checkpoint-generation and graph-analysis code for the zebrafish proofreading study. The active workflow now follows a science-repo layout:
+This repository contains the checkpoint-generation and graph-analysis code for the zebrafish proofreading study, published in [Connectome quality converges predictably to reveal optimal stopping points during proofreading](https://doi.org/10.64898/2026.06.30.735414). The active workflow now follows a science-repo layout:
 
 - `data/raw/`: external inputs such as `changes.tsv`, connectome CSVs, and contactome CSVs
 - `data/provided/`: stable project-supplied inputs
@@ -26,7 +26,7 @@ uv sync --group dev
 Download the Ariadne changelog into `data/raw/`:
 
 ```bash
-wget https://taurus.agglomeration.ariadne.ai/api/changes.tsv -O data/raw/changes.tsv
+wget https://<ariadne-domain-goes-here>/api/changes.tsv -O data/raw/changes.tsv
 ```
 
 Build component-graph snapshots:
@@ -111,8 +111,12 @@ uv run python analysis/projections/run.py \
   --figure-dir results/figures/connectome-projection-milestones
 ```
 
-## References
+## Attribution
 
-- [Preprocessing](docs/Preprocessing.md)
-- [Updating Checkpoints](docs/Updating-Checkpoints.md)
-- [Neuroglancer Links](docs/Neuroglancer-Links.md)
+For questions or collaboration inquiries, please email hannah.martinez@jhuapl.edu or jordan.matelsky@jhuapl.edu.
+
+This software was created by the Johns Hopkins University Applied Physics Laboratory, with funding supported by the NIH BRAIN Initiative under grant no. R24MH114785.
+
+The views, opinions, and/or findings expressed are those of the author(s) and should not be interpreted as representing the official views or policies of the NIH.
+
+© 2026 The Johns Hopkins University Applied Physics Laboratory LLC
