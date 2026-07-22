@@ -6,12 +6,8 @@ from pathlib import Path
 from zfish import checkpoint as checkpoint_mod
 from zfish.paths import default_component_graph_dir
 
-DEFAULT_SUPERVOXELS_PATH = (
-    "precomputed://s3://cvdb-bossdb-boss/smith2024/zebrafish/supervoxels"
-)
-DEFAULT_CHECKPOINT_PREFIX = (
-    "precomputed://s3://cvdb-bossdb-boss/smith2024/zebrafish/"
-)
+DEFAULT_SUPERVOXELS_PATH = ""
+DEFAULT_CHECKPOINT_PREFIX = ""
 DEFAULT_CHECKPOINT_STEM = DEFAULT_CHECKPOINT_PREFIX + "agglomeration_checkpoint_"
 
 
