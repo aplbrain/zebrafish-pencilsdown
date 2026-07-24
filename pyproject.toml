@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "zfish"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "cloud-volume>=11.1.3",
+    "igneous-pipeline>=4.33.0",
+    "intern>=1.4.1",
+    "matplotlib>=3.10.0",
+    "networkx>=3.4.2",
+    "numpy>=2.2.2",
+    "pandas>=2.2.3",
+    "refig>=0.1.0",
+    "rustworkx>=0.17.1",
+    "seaborn>=0.13.2",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["zfish*"]
+
+[dependency-groups]
+dev = [
+    "ipykernel>=6.29.5",
+    "pytest>=8.4.0",
+    "ruff>=0.9.3",
+    "snakemake>=8.25.0",
+]
