@@ -57,6 +57,8 @@ uv run python manage.py remap generate --shuffle-id 1
 uv run python manage.py checkpoint upload --shuffle-id 1
 ```
 
+The output of these commands will be segmentation layers. See https://github.com/aplbrain/cloudome for instructions on generating connectomes from these segmentation layers.
+
 ## Analysis Workflow
 
 Put one ordered connectome series under `data/raw/connectomes/original_order/` and one ordered contactome series under `data/raw/contactomes/original_order/`. The loaders also accept the legacy `data/connectomes` and `data/contactomes` paths for one migration cycle.
