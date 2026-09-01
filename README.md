@@ -23,41 +23,95 @@ uv sync --group dev
 
 ## Checkpoint Workflow
 
-Download the Ariadne changelog into `data/raw/`:
+This workflow converts an Ariadne proofreading changelog into a series of segmentation checkpoints that can be visualized or analyzed. The process consists of four stages:
 
-```bash
-wget https://<ariadne-domain-goes-here>/api/changes.tsv -O data/raw/changes.tsv
+1. Download the proofreading changelog
+2. Reconstruct intermediate agglomeration graphs
+3. Generate supervoxel remapping tables
+4. Apply each remapping to the original supervoxel segmentation to create checkpoint volumes
+
+The default directory structure is
+
+```text
+data/
+├── raw/
+│   └── changes.tsv
+└── generated/
+    ├── component-graphs/
+    └── remaps/
 ```
 
-Build component-graph snapshots:
+Each stage uses the output of the previous stage.
+
+
+### 1. Download the Ariadne changelog
+
+Download the proofreading edit history from your Ariadne deployment.
 
 ```bash
-uv run python manage.py changelog subsample --step-size 5000
+wget https://<ariadne-domain>/api/changes.tsv \
+    -O data/raw/changes.tsv
 ```
 
-Generate remap dictionaries:
+This file records every merge and split operation performed during proofreading.
+
+### 2. Generate component graph snapshots
+
+Reconstruct the agglomeration state after every *N* proofreading edits.
+
+```bash
+uv run python manage.py changelog subsample
+```
+
+| Argument | Default | Description |
+|-----------|---------|-------------|
+| `--changes-file` | `data/raw/changes.tsv` | Input Ariadne changelog |
+| `--output-dir` | `data/generated/component-graphs` | Directory for graph snapshots |
+| `--step-size` | `5000` | Number of proofreading edits between checkpoints |
+| `--max-changes` | Process entire changelog | Stop after *N* edits |
+| `--shuffle-count` | `0` | Generate randomized proofreading orders |
+
+
+### 3. Generate remapping dictionaries
+
+Create lookup tables mapping every supervoxel ID to its agglomerated object ID for each checkpoint.
 
 ```bash
 uv run python manage.py remap generate
 ```
 
-Upload checkpoint channels:
+| Argument | Default |
+|-----------|---------|
+| `--component-graph-dir` | `data/generated/component-graphs` |
+| `--output-dir` | `data/generated/remaps` |
+
+### 4. Generate checkpoint segmentations
+
+Apply each remapping dictionary to the original supervoxel segmentation.
 
 ```bash
-uv run python manage.py checkpoint upload
+uv run python manage.py checkpoint upload \
+    --supervoxels-path precomputed://<path-to-supervoxels> \
+    --checkpoint-prefix precomputed://<output-prefix>
 ```
 
-These commands now default to `data/raw/changes.tsv` and `data/generated/component-graphs/`. Root-level `changes.tsv` and `component-graphs/` are still accepted as fallbacks during migration.
+The result is a sequence of segmentation checkpoints representing the dataset at different stages of proofreading.
 
-To generate shuffled controls:
+| Argument | Default |
+|-----------|-------------|
+| `--supervoxels-path` | (required) CloudVolume containing the original supervoxel segmentation |
+| `--checkpoint-prefix` | (required) Prefix used when writing checkpoint segmentations |
+| `--component-graph-dir` | `data/generated/component-graphs` |
+| `--remap-dir` | `data/generated/remaps` |
+| `--mip` | `0` |
+| `--jobs` | `1` |
+| `--block-size` | `(512, 512, 64)` |
+| `--chunk-size` | `(512, 512, 64)` |
+| `--skip` | `0` |
+| `--shuffle-id` | `None` |
+| `--randomize` | Enabled (disable with `--no-randomize`) |
+| `--progress` | Enabled (disable with `--no-progress`) |
 
-```bash
-uv run python manage.py changelog subsample --step-size 5000 --shuffle-count 4 --shuffle-seed 42
-uv run python manage.py remap generate --shuffle-id 1
-uv run python manage.py checkpoint upload --shuffle-id 1
-```
-
-The output of these commands will be segmentation layers. See https://github.com/aplbrain/cloudome for instructions on generating connectomes from these segmentation layers.
 
 ## Analysis Workflow
 
