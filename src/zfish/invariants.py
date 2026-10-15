@@ -151,6 +151,60 @@ class RxInvariants:
         return float(max_distance)
 
     @staticmethod
+    def effective_diameter(
+        graph: AnyGraph,
+        *,
+        num_seeds: int = 1000,
+        weak_for_directed: bool = True,
+        disconnected_ok: bool = True,
+        percentile: float = 0.9,
+    ) -> float:
+        """Estimate effective diameter from sampled shortest-path distances.
+
+        Effective diameter is the requested percentile of the shortest-path
+        distance distribution. Sampling source nodes keeps this metric
+        practical for large graphs while avoiding the outlier sensitivity of
+        the ordinary diameter.
+        """
+        if not 0.0 <= percentile <= 1.0:
+            raise ValueError("percentile must be between 0 and 1")
+
+        node_count = graph.num_nodes()
+        if node_count <= 1:
+            return 0.0
+
+        work: AnyGraph = graph
+        if isinstance(graph, rx.PyDiGraph) and weak_for_directed:
+            work = graph.to_undirected(multigraph=graph.multigraph)
+        if isinstance(work, rx.PyDiGraph):
+            work = work.to_undirected(multigraph=work.multigraph)
+
+        seeds = RxInvariants._pick_seeds(node_count, num_seeds)
+        distances_sampled: list[float] = []
+        for seed in seeds:
+            distances = RxInvariants._bfs_distances_undirected(work, seed)
+            if not disconnected_ok and len(distances) < node_count:
+                return math.inf
+            distances_sampled.extend(
+                float(distance)
+                for target, distance in distances.items()
+                if target != seed
+            )
+
+        if not distances_sampled:
+            return 0.0
+        distances_sampled.sort()
+        position = percentile * (len(distances_sampled) - 1)
+        lower = math.floor(position)
+        upper = math.ceil(position)
+        if lower == upper:
+            return distances_sampled[lower]
+        weight = position - lower
+        return distances_sampled[lower] + weight * (
+            distances_sampled[upper] - distances_sampled[lower]
+        )
+
+    @staticmethod
     def triangle_count_avg(graph: AnyGraph) -> float:
         undirected = RxInvariants._to_undirected_if_needed(graph)
         node_count = undirected.num_nodes()
@@ -504,9 +558,9 @@ _INVARIANT_SPECS: tuple[InvariantSpec, ...] = (
         fast_enabled=False,
     ),
     InvariantSpec(
-        name="diameter_approx",
-        func=RxInvariants.diameter_approx,
-        ylabel="Diameter (Approx.)",
+        name="effective_diameter",
+        func=RxInvariants.effective_diameter,
+        ylabel="Effective Diameter",
         default_on="largest_strong_component_graph",
         datasets=frozenset({DATASET_CONNECTOME}),
     ),
